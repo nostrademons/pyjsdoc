@@ -41,3 +41,24 @@ It depends on the existence of certain @tags in the documentation.  These are:
 * @dependency: Filename of parent plugin.  Multiple tags allowed
 """
 
+def parse_all_files(files, prefix=None):
+    """
+    Returns the parsed JSDoc for all files in the input list, as a dictionary
+    mapping module names to FileDoc objects.
+
+    The dictionary may either be keyed by the basename of the file (the default)
+    or by having ``prefix`` chopped off the beginning of each full filename.
+    You may pass multiple prefixes as a list; the full filename is tested
+    against each and chopped if it matches.
+    """
+    if isinstance(prefix, str):
+        prefix = [prefix]
+    def key_name(file_name):
+        if prefix is None:
+            return os.path.basename(file_name)
+        for pre in prefix:
+            if file_name.startswith(pre):
+                return file_name[len(pre):]
+        return file_name
+    return dict((key_name(file), map_doc_to_functions(parse_jsdoc(file))) 
+                for file in files)
