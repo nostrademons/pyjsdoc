@@ -3,10 +3,11 @@
  * namespacing.
  *
  * Since the comment is block is followed immediately by something that looks
- * like it could be a function, we explicitly name the module.  This also
- * includes dependencies and other tags.
+ * like it could be a function, we explicitly tag this as a module block.  
  *
- * @module ModuleClosure
+ * This example also includes dependencies and other tags.
+ *
+ * @fileoverview
  * @author Jonathan Tang
  * @license BSD
  * @version 0.1.0

@@ -6,7 +6,7 @@
  * PyJSDoc determines that this comment is the module documentation because
  * it's the first comment within the file that is not (implicitly or explicitly)
  * attached to a function or class.  It's possible to override this with an
- * \@module tag, as shown in module_closure.js.
+ * \@fileoverview tag, as shown in module_closure.js.
  *
  * Also note the escaping of the \@ sign above; this is necessary to avoid
  * interpreting it as a tag.  PyJSDoc is fully extensible, and so it'll
