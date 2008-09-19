@@ -253,10 +253,7 @@ FUNCTION_REGEXPS = [
     'function (\w+)',
     '\w+\.prototype\.(\w+)\s*=\s*function',
     '(\w+):\sfunction',
-    'jQuery\.fn\.(\w+)\s*=\s*function',
-    'jQuery\.(\w+)\s*=\s*function',
-    '\$\.fn\.(\w+)\s*=\s*function',
-    '\$\.(\w+)\s*=\s*function'
+    '\.(\w+)\s*=\s*function'
 ]
 
 def guess_function_name(first_code_line, parsed_comment):
