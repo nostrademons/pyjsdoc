@@ -185,6 +185,22 @@ def get_doc_comments(text):
     return [make_pair(match) for match in re.finditer('/\*\*(.*?)\*/', 
             text, re.DOTALL)]
 
+def strip_stars(doc_comment):
+    r"""
+    Strips leading stars from a doc comment.  
+
+    >>> strip_stars('/** This is a comment. */')
+    'This is a comment.'
+    >>> strip_stars('/**\n * This is a\n * multiline comment. */')
+    'This is a\n multiline comment.'
+    >>> strip_stars('/** \n\t * This is a\n\t * multiline comment. \n*/')
+    'This is a\n multiline comment.'
+
+
+    """
+    return re.sub('\n\s*?\*\s*?', '\n', doc_comment[3:-2]).strip()
+
+##### Command-line functions #####
 
 def usage(command_name):
     print """
