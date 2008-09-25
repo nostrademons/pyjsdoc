@@ -200,6 +200,45 @@ def strip_stars(doc_comment):
     """
     return re.sub('\n\s*?\*\s*?', '\n', doc_comment[3:-2]).strip()
 
+def split_tag(section):
+    """
+    Splits the JSDoc tag text (everything following the @) at the first
+    whitespace.  Returns a tuple of (tagname, body).
+    """
+    splitval = re.split('\s+', section, 1)
+    tag, body = len(splitval) > 1 and splitval or (splitval[0], '')
+    return tag.strip(), body.strip()
+
+def split_tags(doc_comment):
+    r"""
+    Splits the raw comment text into a dictionary of tags.  The main comment
+    body is included as 'body'.
+
+    >>> comment = get_doc_comments(read_file('examples/module.js'))[4][0]
+    >>> split_tags(strip_stars(comment))['body']
+    'This is the documentation for the fourth function.\n\n Since the function being documented is itself generated from another\n function, its name needs to be specified explicitly. using the @function tag'
+    >>> split_tags(strip_stars(comment))['function']
+    'not_auto_discovered'
+    >>> split_tags(strip_stars(comment))['param']
+    ['{String} arg1 The first argument.', '{Int} arg2 The second argument.']
+
+
+
+    """
+    sections = re.split('\n\s*@', doc_comment)
+    tags = { 'body': sections[0].strip() }
+    for section in sections[1:]:
+        tag, body = split_tag(section)
+        if tag in tags:
+            existing = tags[tag]
+            try:
+                existing.append(body)
+            except AttributeError:
+                tags[tag] = [existing, body]
+        else:
+            tags[tag] = body
+    return tags
+
 ##### Command-line functions #####
 
 def usage(command_name):

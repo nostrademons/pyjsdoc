@@ -43,7 +43,7 @@ window.the_third_function = function(arg1, arg2) {
  * This is the documentation for the fourth function.
  *
  * Since the function being documented is itself generated from another
- * function, its name needs to be specified explicitly. using the \@function tag
+ * function, its name needs to be specified explicitly. using the @function tag
  *
  * @function not_auto_discovered
  * @param {String} arg1 The first argument.
