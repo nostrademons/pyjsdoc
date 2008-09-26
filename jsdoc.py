@@ -114,8 +114,6 @@ def split_delimited(delimiters, split_by, text):
     ``delimiters`` should be an even-length string with each pair of matching
     delimiters listed together, open first.
 
-    ``split_by`` may be a predicate function instead of a string, in which
-    case it should return true on a character to split.
 
     >>> list(split_delimited('{}[]', ',', ''))
     ['']
@@ -123,8 +121,19 @@ def split_delimited(delimiters, split_by, text):
     ['foo', 'bar']
     >>> list(split_delimited('[]', ',', 'foo,[bar, baz]'))
     ['foo', '[bar, baz]']
+    >>> list(split_delimited('{}', ' ', '{Type Name} name Desc'))
+    ['{Type Name}', 'name', 'Desc']
     >>> list(split_delimited('[]{}', ',', '[{foo,[bar, baz]}]'))
     ['[{foo,[bar, baz]}]']
+
+    Two adjacent delimiters result in a zero-length string between them:
+
+    >>> list(split_delimited('{}', ' ', '{Type Name}  Desc'))
+    ['{Type Name}', '', 'Desc']
+
+    ``split_by`` may be a predicate function instead of a string, in which
+    case it should return true on a character to split.
+
     >>> list(split_delimited('', lambda c: c in '[]{}, ', '[{foo,[bar, baz]}]'))
     ['', '', 'foo', '', 'bar', '', 'baz', '', '', '']
 
@@ -209,24 +218,56 @@ def split_tag(section):
     tag, body = len(splitval) > 1 and splitval or (splitval[0], '')
     return tag.strip(), body.strip()
 
-def split_tags(doc_comment):
+FUNCTION_REGEXPS = [
+    'function (\w+)',
+    '(\w+):\sfunction',
+    '\.(\w+)\s*=\s*function',
+]
+
+def guess_function_name(next_line, regexps=FUNCTION_REGEXPS):
+    """
+    Attempts to determine the function name from the first code line
+    following the comment.  The patterns recognized are described by
+    `regexps`, which defaults to FUNCTION_REGEXPS.  If a match is successful, 
+    returns the function name.  Otherwise, returns None.
+    """
+    for regexp in regexps:
+        match = re.search(regexp, next_line)
+        if match:
+            return match.group(1)
+    return None
+
+def guess_parameters(next_line):
+    """
+    Attempts to guess parameters based on the presence of a parenthesized
+    group of identifiers.  If successful, returns a list of parameter names;
+    otherwise, returns None.
+    """
+    match = re.search('\(([\w\s,]+)\)', next_line)
+    if match:
+        return [arg.strip() for arg in match.group(1).split(',')]
+    else:
+        return None
+
+def parse_comment(doc_comment):
     r"""
     Splits the raw comment text into a dictionary of tags.  The main comment
-    body is included as 'body'.
+    body is included as 'doc'.
 
     >>> comment = get_doc_comments(read_file('examples/module.js'))[4][0]
-    >>> split_tags(strip_stars(comment))['body']
+    >>> parse_comment(strip_stars(comment))['doc']
     'This is the documentation for the fourth function.\n\n Since the function being documented is itself generated from another\n function, its name needs to be specified explicitly. using the @function tag'
-    >>> split_tags(strip_stars(comment))['function']
+    >>> parse_comment(strip_stars(comment))['function']
     'not_auto_discovered'
-    >>> split_tags(strip_stars(comment))['param']
+
+    If there are multiple tags with the same name, they're included as a list:
+
+    >>> parse_comment(strip_stars(comment))['param']
     ['{String} arg1 The first argument.', '{Int} arg2 The second argument.']
-
-
 
     """
     sections = re.split('\n\s*@', doc_comment)
-    tags = { 'body': sections[0].strip() }
+    tags = { 'doc': sections[0].strip() }
     for section in sections[1:]:
         tag, body = split_tag(section)
         if tag in tags:
@@ -238,6 +279,218 @@ def split_tags(doc_comment):
         else:
             tags[tag] = body
     return tags
+
+def make_comment(next_line, parsed_comment):
+    """
+    Creates the appropriate Doc class for a next_line, parsed_comment pair.
+    """
+    if 'fileoverview' in parsed_comment:
+        parsed_comment.name = 'file_overview'
+        return parsed_comment
+
+    function_name = parsed_comment.get('function') or \
+                    guess_function_name(next_line, parsed_comment)
+    if function_name:
+        return 
+
+#### Classes #####
+
+class FileDoc(object):
+    """
+    Represents documentaion for an entire file.  The constructor takes the
+    source text for file, parses it, then provides a class wrapper around
+    the parsed text.
+    """
+
+    def __init__(self, file_name, file_text):
+        self.name = file_name
+        self.order = []
+        self.comments = {}
+        for comment in get_doc_comments(file_text):
+            parsed_comment = make_comment(parse_comment(strip_stars(comment)))
+            self.order.append(parse_comment.name)
+            self.comments[parse_comment.name] = parse_comment
+
+    def __str__(self):
+        return "Docs for file " + self.name
+
+    def __iter__(self):
+        """
+        Returns all comments from the file, in the order they appear.
+        """
+        return (self.comments[name] for name in self.order)
+
+    def __getitem__(self, name):
+        """
+        Returns the specific method/function/class from the file.
+        """
+        return self.comments[name]
+
+    def _module_prop(self, name, default=''):
+        return self.comments['file_overview'].get(prop, default)
+
+    @property
+    def doc(self):
+        return self._module_prop('body')
+
+    @property
+    def author(self):
+        return self._module_prop('author')
+
+    @property
+    def version(self):
+        return self._module_prop('version')
+
+    @property
+    def dependencies(self):
+        val = self._module_prop('dependency', [])
+        if isinstance(val, list):
+            return val
+        else:
+            return [val]
+
+    def _filtered_iter(self, pred):
+        return (self.comments[name] for name in self.order 
+                if pred(self.comments[name]))
+
+    @property
+    def functions(self):
+        """
+        Returns all standalone functions in the file, in textual order.
+        """
+        def is_function(comment):
+            return isinstance(comment, FunctionDoc) \
+                    and comment.member_of is None
+        return self._filtered_iter(is_function)
+
+    @property
+    def methods(self):
+        """
+        Returns all member functions in the file, in textual order.
+        """
+        def is_method(comment):
+            return isinstance(comment, FunctionDoc) \
+                    and comment.member_of is not None
+        return self._filtered_iter(is_method)
+
+    @property
+    def classes(self):
+        return self._filtered_iter(lambda c: isinstance(c, ClassDoc))
+
+class CommentDoc(object):
+    """
+    Base class for all classes that represent a parsed comment of some sort.
+    """
+    def __init__(self, parsed_comment):
+        self.parsed = parse_comment
+
+    def __str__(self):
+        return "Docs for function " + self.name
+
+    def __getitem__(self, tag_name):
+        return self.get(tag_name)
+
+    def get(self, tag_name, default=''):
+        """
+        Returns the value of a particular tag, or None if that tag doesn't
+        exist.  Use 'doc' for the comment body itself.
+        """
+        return self.parsed.get(tag_name, default)
+
+    def get_as_list(self, tag_name):
+        """
+        Returns the value of a tag, making sure that it's a list.  Absent
+        tags are returned as an empty-list; single tags are returned as a
+        one-element list.
+        """
+        val = self.get(tag_name, [])
+        if isinstance(val, list):
+            return val
+        else:
+            return [val]
+
+def FunctionDoc(CommentDoc):
+    """
+    Represents documentation for a single function or method.  Takes a parsed
+    comment and provides accessors for accessing the various fields.
+    """
+    
+    @property
+    def name(self): 
+        return self.get('function')
+
+    @property
+    def doc(self):
+        return self.get('doc')
+
+    @property
+    def params(self):
+        return [ParamDoc(text) for text 
+                in self.get_as_list('param') + self.get_as_list('argument')]
+
+    @property
+    def options(self):
+        return [ParamDoc(text) for text in self.get_as_list('option')]
+
+    @property
+    def return_val(self):
+        ret = self.get('return') or self.get('returns')
+        type = self.get('type')
+        if '{' in ret and '}' in ret:
+            return ParamDoc(ret)
+        if ret and type:
+            return ParamDoc('{%s} %s' % (type, ret))
+        return ParamDoc(ret)
+
+    @property
+    def throws(self):
+        def make_param(text):
+            if not ('{' in text and '}' in text):
+                # Handle old JSDoc format
+                text = '{%s} %s' % text.split(maxsplit=1)
+            return ParamDoc(text)
+        return [make_param(text) for text in 
+                self.get_as_list('throws') + self.get_as_list('exception')]
+
+    @property
+    def private(self):
+        return 'private' in self.parsed
+
+    @property
+    def member_of(self):
+        return self.get('member')
+
+class ClassDoc(CommentDoc):
+    """
+    Represents documentation for a single class.
+    """
+    # The 'methods' attribute should be set externally after creation to a
+    # list of methods
+
+    @property
+    def name(self):
+        return self.get('class') or self.get('constructor')
+
+    @property
+    def superclass(self):
+        return self.get('base')
+
+class ParamDoc(object):
+    """
+    Represents a parameter, option, or parameter-like object, basically
+    anything that has a name, a type, and a description.  This is also used
+    for return types and exceptions, which use an empty string for the name.
+    """
+    def __init__(self, text):
+        parsed = list(split_delimited('{}', ' ', text))
+        if parsed[0].startswith('{') and parsed[0].endswith('}'):
+            self.type = parsed[0][1:-1]
+            self.name = parsed[1]
+            self.doc = ' '.join(parsed[2:])
+        else:
+            self.type = ''
+            self.name = parsed[0]
+            self.doc = ' '.join(parsed[1:])
 
 ##### Command-line functions #####
 
