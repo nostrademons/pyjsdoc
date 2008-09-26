@@ -478,8 +478,29 @@ class ClassDoc(CommentDoc):
 class ParamDoc(object):
     """
     Represents a parameter, option, or parameter-like object, basically
-    anything that has a name, a type, and a description.  This is also used
-    for return types and exceptions, which use an empty string for the name.
+    anything that has a name, a type, and a description, separated by spaces.
+    This is also used for return types and exceptions, which use an empty
+    string for the name.
+
+    >>> param = ParamDoc('{Array<DOM>} elems The elements to act upon')
+    >>> param.name
+    'elems'
+    >>> param.doc
+    'The elements to act upon'
+    >>> param.type
+    'Array<DOM>'
+
+    You can also omit the type: if the first element is not surrounded by
+    curly braces, it's assumed to be the name instead:
+
+    >>> param2 = ParamDoc('param1 The first param')
+    >>> param2.type
+    ''
+    >>> param2.name
+    'param1'
+    >>> param2.doc
+    'The first param'
+
     """
     def __init__(self, text):
         parsed = list(split_delimited('{}', ' ', text))
