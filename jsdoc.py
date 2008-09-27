@@ -249,25 +249,29 @@ def guess_parameters(next_line):
     else:
         return None
 
-def parse_comment(doc_comment):
+def parse_comment(doc_comment, next_line):
     r"""
     Splits the raw comment text into a dictionary of tags.  The main comment
     body is included as 'doc'.
 
     >>> comment = get_doc_comments(read_file('examples/module.js'))[4][0]
-    >>> parse_comment(strip_stars(comment))['doc']
+    >>> parse_comment(strip_stars(comment), '')['doc']
     'This is the documentation for the fourth function.\n\n Since the function being documented is itself generated from another\n function, its name needs to be specified explicitly. using the @function tag'
-    >>> parse_comment(strip_stars(comment))['function']
+    >>> parse_comment(strip_stars(comment), '')['function']
     'not_auto_discovered'
 
     If there are multiple tags with the same name, they're included as a list:
 
-    >>> parse_comment(strip_stars(comment))['param']
+    >>> parse_comment(strip_stars(comment), '')['param']
     ['{String} arg1 The first argument.', '{Int} arg2 The second argument.']
 
     """
     sections = re.split('\n\s*@', doc_comment)
-    tags = { 'doc': sections[0].strip() }
+    tags = { 
+        'doc': sections[0].strip(),
+        'guessed_function': guess_function_name(next_line),
+        'guessed_params': guess_parameters(next_line)
+    }
     for section in sections[1:]:
         tag, body = split_tag(section)
         if tag in tags:
@@ -279,6 +283,10 @@ def parse_comment(doc_comment):
         else:
             tags[tag] = body
     return tags
+
+def parse_comments_for_file(filename):
+    return [parse_comment(strip_stars(comment), next_line)
+            for comment, next_line in get_doc_comments(read_file(filename))]
 
 def make_comment(next_line, parsed_comment):
     """
@@ -382,7 +390,7 @@ class CommentDoc(object):
     Base class for all classes that represent a parsed comment of some sort.
     """
     def __init__(self, parsed_comment):
-        self.parsed = parse_comment
+        self.parsed = parsed_comment
 
     def __str__(self):
         return "Docs for function " + self.name
@@ -409,15 +417,25 @@ class CommentDoc(object):
         else:
             return [val]
 
-def FunctionDoc(CommentDoc):
-    """
+class FunctionDoc(CommentDoc):
+    r"""
     Represents documentation for a single function or method.  Takes a parsed
     comment and provides accessors for accessing the various fields.
+
+    >>> comments = parse_comments_for_file('examples/module_closure.js')
+    >>> fn1 = FunctionDoc(comments[1])
+    >>> fn1.name
+    'the_first_function'
+    >>> fn1.doc
+    'The auto-naming can pick up functions defined as fields of an object,\n as is common with classes and the module pattern.'
+
     """
+    def __init__(self, parsed_comment):
+        super(FunctionDoc, self).__init__(parsed_comment)
     
     @property
     def name(self): 
-        return self.get('function')
+        return self.get('guessed_function') or self.get('function')
 
     @property
     def doc(self):
@@ -425,29 +443,108 @@ def FunctionDoc(CommentDoc):
 
     @property
     def params(self):
-        return [ParamDoc(text) for text 
-                in self.get_as_list('param') + self.get_as_list('argument')]
+        """
+        Returns a ParamDoc for each parameter of the function, picking up
+        the order from the actual parameter list.
+
+        >>> comments = parse_comments_for_file('examples/module_closure.js')
+        >>> fn2 = FunctionDoc(comments[2])
+        >>> fn2.params[0].name
+        'elem'
+        >>> fn2.params[1].type
+        'Function(DOM)'
+        >>> fn2.params[2].doc
+        'The Options array.'
+
+        """
+        tag_texts = self.get_as_list('param') + self.get_as_list('argument')
+        if self.get('guessed_params') is None:
+            return [ParamDoc(text) for text in tag_texts]
+        else:
+            param_dict = {}
+            for text in tag_texts:
+                param = ParamDoc(text)
+                param_dict[param.name] = param
+            return [param_dict.get(name) or ParamDoc('{} ' + name)
+                    for name in self.get('guessed_params')]
 
     @property
     def options(self):
+        """
+        Return the options for this function, as a list of ParamDocs.  This is
+        a common pattern for emulating keyword arguments.
+
+        >>> comments = parse_comments_for_file('examples/module_closure.js')
+        >>> fn2 = FunctionDoc(comments[2])
+        >>> fn2.options[0].name
+        'foo'
+        >>> fn2.options[1].type
+        'Int'
+        >>> fn2.options[1].doc
+        'Some other option'
+
+        """
         return [ParamDoc(text) for text in self.get_as_list('option')]
 
     @property
     def return_val(self):
+        """
+        Returns the return value of the function, as a ParamDoc with an
+        empty name:
+
+        >>> comments = parse_comments_for_file('examples/module_closure.js')
+        >>> fn1 = FunctionDoc(comments[1])
+        >>> fn1.return_val.name
+        ''
+        >>> fn1.return_val.doc
+        'Some value'
+        >>> fn1.return_val.type
+        'String'
+
+        >>> fn2 = FunctionDoc(comments[2])
+        >>> fn2.return_val.doc
+        'Some property of the elements.'
+        >>> fn2.return_val.type
+        'Array<String>'
+
+        """
         ret = self.get('return') or self.get('returns')
         type = self.get('type')
         if '{' in ret and '}' in ret:
+            if not '}  ' in ret:
+                # Ensure that name is empty
+                ret = ret.replace('} ', '}  ')
             return ParamDoc(ret)
         if ret and type:
-            return ParamDoc('{%s} %s' % (type, ret))
+            return ParamDoc('{%s}  %s' % (type, ret))
         return ParamDoc(ret)
 
     @property
     def throws(self):
+        """
+        Returns a list of ParamDoc objects (with empty names) of the
+        exception tags for the function.
+
+        >>> comments = parse_comments_for_file('examples/module_closure.js')
+        >>> fn1 = FunctionDoc(comments[1])
+        >>> fn1.throws[0].doc
+        'Another exception'
+        >>> fn1.throws[1].doc
+        'A fake exception'
+        >>> fn1.throws[1].type
+        'String'
+
+        """
         def make_param(text):
-            if not ('{' in text and '}' in text):
+            if '{' in text and '}' in text:
+                # Make sure param name is blank:
+                word_split = list(split_delimited('{}', ' ', text))
+                if word_split[1] != '':
+                    text = ' '.join([word_split[0], ''] + word_split[1:])
+            else:
                 # Handle old JSDoc format
-                text = '{%s} %s' % text.split(maxsplit=1)
+                word_split = text.split()
+                text = '{%s}  %s' % (word_split[0], ' '.join(word_split[1:]))
             return ParamDoc(text)
         return [make_param(text) for text in 
                 self.get_as_list('throws') + self.get_as_list('exception')]
@@ -466,6 +563,8 @@ class ClassDoc(CommentDoc):
     """
     # The 'methods' attribute should be set externally after creation to a
     # list of methods
+    def __init__(self, parsed_comment):
+        super(FunctionDoc, self).__init__(parsed_comment)
 
     @property
     def name(self):
