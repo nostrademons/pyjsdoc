@@ -27,6 +27,18 @@ import sys
 import getopt
 import cgi
 
+try:
+    import cjson
+    encode_json = lambda val: cjson.encode(val)
+except ImportError:
+    try:
+        import simplejson
+        encode_json = lambda val: simplejson.dumps(val)
+    except ImportError:
+        def encode_json(val):
+            raise ImportError(
+                    "Either cjson or simplejson is required for JSON encoding")
+
 ##### INPUT/OUTPUT #####
 
 def warn(format, *args):
@@ -384,6 +396,12 @@ class CodeBaseDoc(dict):
         """
         return self._module_index('classes')
 
+    def to_json(self):
+        return encode_json(self.to_dict())
+
+    def to_dict(self):
+        return dict((key, val.to_dict()) for key, val in self.items())
+
 class FileDoc(object):
     """
     Represents documentaion for an entire file.  The constructor takes the
@@ -416,10 +434,10 @@ class FileDoc(object):
 
         for method in self.methods:
             try:
-                self.comments[method.member_of].add_method(method)
+                self.comments[method.member].add_method(method)
             except AttributeError:
-                warn('member_of %s of %s is not a class', 
-                            method.member_of, method.name)
+                warn('member %s of %s is not a class', 
+                            method.member, method.name)
             except KeyError:
                 pass
 
@@ -537,7 +555,7 @@ class FileDoc(object):
 
         """
         def is_function(comment):
-            return isinstance(comment, FunctionDoc) and not comment.member_of
+            return isinstance(comment, FunctionDoc) and not comment.member
         return self._filtered_iter(is_function)
 
     @property
@@ -552,7 +570,7 @@ class FileDoc(object):
 
         """
         def is_method(comment):
-            return isinstance(comment, FunctionDoc) and comment.member_of
+            return isinstance(comment, FunctionDoc) and comment.member
         return self._filtered_iter(is_method)
 
     @property
@@ -568,8 +586,10 @@ class FileDoc(object):
         'first_method'
 
         """
-
         return self._filtered_iter(lambda c: isinstance(c, ClassDoc))
+
+    def to_dict(self):
+        return [comment.to_dict() for comment in self]
 
 class CommentDoc(object):
     """
@@ -599,16 +619,28 @@ class CommentDoc(object):
         Returns the value of a tag, making sure that it's a list.  Absent
         tags are returned as an empty-list; single tags are returned as a
         one-element list.
+
+        The returned list is a copy, and modifications do not affect the
+        original object.
         """
         val = self.get(tag_name, [])
         if isinstance(val, list):
-            return val
+            return val[:]
         else:
             return [val]
 
     @property
     def doc(self):
         return self.get('doc')
+
+    def to_json(self):
+        return encode_json(self.to_dict())
+
+    def to_html(self):
+        return self.DEFAULT_HTML_STRING % self.to_dict()
+
+    def to_dict(self):
+        return self.parsed.copy()
 
 class ModuleDoc(CommentDoc):
     """
@@ -629,6 +661,16 @@ class ModuleDoc(CommentDoc):
 
     @property
     def dependencies(self): return self.get_as_list('dependency')
+
+    def to_dict(self):
+        vars = super(ModuleDoc, self).to_dict()
+        vars['dependencies'] = self.dependencies
+        vars['name'] = self.name
+        try:
+            vars['all_dependencies'] = self.all_dependencies[:]
+        except AttributeError:
+            vars['all_dependencies'] = []
+        return vars
 
 class FunctionDoc(CommentDoc):
     r"""
@@ -759,16 +801,30 @@ class FunctionDoc(CommentDoc):
                 self.get_as_list('throws') + self.get_as_list('exception')]
 
     @property
-    def private(self):
+    def is_private(self):
         return 'private' in self.parsed
 
     @property
-    def member_of(self):
+    def member(self):
         return self.get('member')
 
     @property
     def is_constructor(self):
         return 'constructor' in self.parsed
+
+    def to_dict(self):
+        vars = super(FunctionDoc, self).to_dict()
+        vars.update({
+            'name': self.name,
+            'params': [param.to_dict() for param in self.params],
+            'options': [option.to_dict() for option in self.options],
+            'throws': [exc.to_dict() for exc in self.throws],
+            'return_val': self.return_val.to_dict(),
+            'is_private': self.is_private,
+            'is_constructor': self.is_constructor,
+            'member': self.member
+        })
+        return vars
 
 class ClassDoc(CommentDoc):
     """
@@ -799,6 +855,14 @@ class ClassDoc(CommentDoc):
 
     def add_method(self, method):
         self.methods.append(method)
+
+    def to_dict(self):
+        vars = super(ClassDoc, self).to_dict()
+        vars.update({
+            'name': self.name,
+            'method': [method.to_dict() for method in self.methods]
+        })
+        return vars
 
 class ParamDoc(object):
     """
@@ -838,6 +902,12 @@ class ParamDoc(object):
             self.name = parsed[0]
             self.doc = ' '.join(parsed[1:])
 
+    def to_dict(self):
+        return {
+            'name': self.name,
+            'type': self.type,
+            'doc': self.doc
+        }
 
 ##### DEPENDENCIES #####
 
