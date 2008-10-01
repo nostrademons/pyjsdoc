@@ -711,6 +711,94 @@ class ParamDoc(object):
             self.name = parsed[0]
             self.doc = ' '.join(parsed[1:])
 
+
+##### DEPENDENCIES #####
+
+class CyclicDependency(Exception):
+    """
+    Exception raised if there is a cyclic dependency.
+    """
+    def __init__(self, remaining_dependencies):
+        self.values = remaining_dependencies
+
+    def __str__(self):
+        return ('The following dependencies result in a cycle: '
+              + ', '.join(self.values))
+
+class MissingDependency(Exception):
+    """
+    Exception raised if a file references a dependency that doesn't exist.
+    """
+    def __init__(self, file, dependency):
+        self.file = file
+        self.dependency = dependency
+
+    def __str__(self):
+        return "Couldn't find dependency %s when processing %s" % \
+                (self.dependency, self.file)
+
+
+def build_dependency_graph(start_nodes, js_doc):
+    """
+    Builds a graph where nodes are filenames and edges are reverse dependencies
+    (so an edge from jquery.js to jquery.dimensions.js indicates that jquery.js
+    must be included before jquery.dimensions.js).  The graph is represented
+    as a dictionary from filename to (in-degree, edges) pair, for ease of
+    topological sorting.  Also returns a list of nodes of degree zero.
+    """
+    queue = []
+    dependencies = {}
+    start_sort = []
+    def add_vertex(file):
+        in_degree = len(js_doc[file].dependencies)
+        dependencies[file] = [in_degree, []]
+        queue.append(file)
+        if in_degree == 0:
+            start_sort.append(file)
+    def add_edge(from_file, to_file):
+        dependencies[from_file][1].append(to_file)
+    def is_in_graph(file):
+        return file in dependencies
+
+    for file in start_nodes:
+        add_vertex(file)
+    for file in queue:
+        for dependency in js_doc[file].dependencies:
+            if dependency not in js_doc:
+                raise MissingDependency(file, dependency)
+            if not is_in_graph(dependency):
+                add_vertex(dependency)
+            add_edge(dependency, file)
+    return dependencies, start_sort 
+
+def topological_sort(dependencies, start_nodes):
+    retval = []
+    def edges(node): return dependencies[node][1]
+    def in_degree(node): return dependencies[node][0]
+    def remove_incoming(node): dependencies[node][0] = in_degree(node) - 1
+    while start_nodes:
+        node = start_nodes.pop()
+        retval.append(node)
+        for child in edges(node):
+            remove_incoming(child)
+            if not in_degree(child):
+                start_nodes.append(child)
+    leftover_nodes = [node for node in dependencies.keys()
+                      if in_degree(node) > 0]
+    if leftover_nodes:
+        raise CyclicDependency(leftover_nodes)
+    else:
+        return retval
+
+def find_dependencies(start_nodes, js_doc):
+    """ 
+    Sorts the dependency graph, taking in a list of starting filenames and a 
+    hash from JS filename to parsed documentation.  Returns an ordered list 
+    of transitive dependencies such that no module appears before its
+    dependencies.
+    """
+    return topological_sort(*build_dependency_graph(start_nodes, js_doc))
+
 ##### Command-line functions #####
 
 def usage(command_name):
