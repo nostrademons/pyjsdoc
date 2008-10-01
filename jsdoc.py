@@ -312,7 +312,7 @@ class FileDoc(object):
 
             if raw.get('function') or raw.get('guessed_function'):
                 obj = FunctionDoc(raw)
-            elif raw.get('class') or raw.get('constructor'):
+            elif raw.get('class'):
                 obj = ClassDoc(raw)
             elif raw.get('fileoverview') or is_first:
                 obj = ModuleDoc(raw)
@@ -653,6 +653,10 @@ class FunctionDoc(CommentDoc):
     def member_of(self):
         return self.get('member')
 
+    @property
+    def is_constructor(self):
+        return 'constructor' in self.parsed
+
 class ClassDoc(CommentDoc):
     """
     Represents documentation for a single class.
@@ -664,11 +668,15 @@ class ClassDoc(CommentDoc):
 
     @property
     def name(self):
-        return self.get('class') or self.get('constructor')
+        return self.get('class')
 
     @property
     def superclass(self):
-        return self.get('base')
+        return self.get('extends') or self.get('base')
+
+    @property
+    def constructors(self):
+        return [fn for fn in self.methods if fn.is_constructor]
 
     def add_method(self, method):
         self.methods.append(method)

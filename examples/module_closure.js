@@ -46,6 +46,13 @@ var ModuleClosure = this.ModuleClosure = {
 
     }
 
+    /**
+     * We attempt to guess parameter names from the line following the comment,
+     * though obviously we can only get names and not types or documentation
+     * from this.
+     */
+    make_class: function(superclass, methods) {}
+
 };
 
 })();
