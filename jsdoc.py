@@ -32,6 +32,12 @@ import cgi
 def warn(format, *args):
     sys.stderr.write(format % args + '\n')
 
+def flatten(iter_of_iters):
+    retval = []
+    for val in iter_of_iters:
+        retval.extend(val)
+    return retval
+
 def is_js_file(filename):
     """
     Returns true if the filename ends in .js and is not a packed or
@@ -62,27 +68,11 @@ def list_js_files(dir):
             if is_js_file(filename):
                 yield os.path.join(dirpath, filename)
 
-def get_path_list(opts):
-    """
-    Returns a list of all root paths where JS files can be found, given the
-    command line options for this script.
-    """
-    paths = []
-    for opt, arg in opts:
-        if opt in ('-i', '--input'):
-            return [line.strip() for line in sys.stdin.readlines()]
-        elif opt in ('-p', '--jspath'):
-            paths.append(arg)
-    return paths or [os.getcwd()]
-
 def get_file_list(paths):
     """
     Returns a list of all JS files, given the root paths.
     """
-    retval = []
-    for path in paths:
-        retval.extend(list_js_files(path))
-    return retval
+    return flatten(list_js_files(path) for path in paths)
 
 def read_file(path):
     """
@@ -205,7 +195,6 @@ def strip_stars(doc_comment):
     >>> strip_stars('/** \n\t * This is a\n\t * multiline comment. \n*/')
     'This is a\n multiline comment.'
 
-
     """
     return re.sub('\n\s*?\*\s*?', '\n', doc_comment[3:-2]).strip()
 
@@ -295,6 +284,106 @@ def parse_comments_for_file(filename):
 
 #### Classes #####
 
+class CodeBaseDoc(dict):
+    """
+    Represents the documentation for an entire codebase.
+
+    This takes a list of root paths and a list of prefixes to chop off the
+    beginning of each filename.  The resulting object acts like a dictionary of
+    FileDoc objects.  
+    
+    The dictionary may either be keyed by the basename of the
+    file (the default) or by having ``prefix`` chopped off the beginning of
+    each full filename.  You may pass multiple prefixes as a list; the full
+    filename is tested against each and chopped if it matches.
+
+    >>> CodeBaseDoc(['examples']).keys()
+    ['module_closure.js', 'module.js', 'class.js', 'subclass.js']
+
+    It also handles dependency & subclass analysis, setting the appropriate
+    fields on the contained objects.  Note that the keys (after prefix
+    chopping) should match the names declared in @dependency or @see tags;
+    otherwise, you may get MissingDependencyErrors:
+
+    >>> CodeBaseDoc(['examples'], '').keys()
+    Traceback (most recent call last):
+    MissingDependency: Couldn't find dependency module.js when processing examples/module_closure.js
+
+    """
+
+    def __init__(self, root_paths, prefix=None):
+        if isinstance(prefix, str):
+            prefix = [prefix]
+
+        self.populate_files(root_paths, prefix)
+        self.build_dependencies()
+        self.build_superclass_lists()
+
+    def populate_files(self, root_paths, prefix):
+        files = get_file_list(root_paths)
+        def key_name(file_name):
+            if prefix is None:
+                return os.path.basename(file_name)
+            for pre in prefix:
+                if file_name.startswith(pre):
+                    return file_name[len(pre):]
+            return file_name
+
+        for file in files:
+            name = key_name(file)
+            self[name] = FileDoc(name, read_file(file))
+
+    def build_dependencies(self):
+        """
+        >>> CodeBaseDoc(['examples'])['subclass.js'].all_dependencies
+        ['module.js', 'module_closure.js', 'class.js', 'subclass.js']
+        """
+        for module in self.values():
+            module.set_all_dependencies(find_dependencies([module.name], self))
+
+    def build_superclass_lists(self):
+        """
+        >>> CodeBaseDoc(['examples']).all_classes['MySubClass'].all_superclasses[0].name
+        'MyClass'
+        """
+        cls_dict = self.all_classes
+        for cls in cls_dict.values():
+            cls.all_superclasses = []
+            superclass = cls.superclass
+            try:
+                while superclass:
+                    superclass_obj = cls_dict[superclass]
+                    cls.all_superclasses.append(superclass_obj)
+                    superclass = superclass_obj.superclass
+            except KeyError:
+                print "Missing superclass: " + superclass
+
+    def _module_index(self, attr):
+        return dict((obj.name, obj) for module in self.values()
+                                    for obj in getattr(module, attr))
+
+    @property
+    def all_functions(self):
+        """
+        Returns a dict of all functions in all modules of the codebase,
+        keyed by their name.
+        """
+        return self._module_index('functions')
+
+    @property
+    def all_methods(self):
+        """
+        Returns a dict of all methods in all modules.
+        """
+        return self._module_index('methods')
+
+    @property
+    def all_classes(self):
+        """
+        Returns a dict of all classes in all modules.
+        """
+        return self._module_index('classes')
+
 class FileDoc(object):
     """
     Represents documentaion for an entire file.  The constructor takes the
@@ -305,16 +394,18 @@ class FileDoc(object):
     def __init__(self, file_name, file_text):
         self.name = file_name
         self.order = []
-        self.comments = {}
+        self.comments = { 'file_overview': ModuleDoc({}) }
         is_first = True
         for comment, next_line in get_doc_comments(file_text):
             raw = parse_comment(strip_stars(comment), next_line)
 
-            if raw.get('function') or raw.get('guessed_function'):
+            if 'fileoverview' in raw:
+                obj = ModuleDoc(raw)
+            elif raw.get('function') or raw.get('guessed_function'):
                 obj = FunctionDoc(raw)
             elif raw.get('class'):
                 obj = ClassDoc(raw)
-            elif raw.get('fileoverview') or is_first:
+            elif is_first:
                 obj = ModuleDoc(raw)
             else:
                 continue
@@ -387,6 +478,12 @@ class FileDoc(object):
         else:
             return self.comments[index]
 
+    def set_all_dependencies(self, dependencies):
+        """
+        Sets the `all_dependencies` property on the module documentation.
+        """
+        self.comments['file_overview'].all_dependencies = dependencies
+
     def _module_prop(self, name):
         return getattr(self.comments['file_overview'], name)
 
@@ -404,7 +501,23 @@ class FileDoc(object):
 
     @property
     def dependencies(self):
-        return self._module_prop('dependency')
+        """
+        Returns the immediate dependencies of a module (only those that are
+        explicitly declared).  Use the `all_dependencies` field for transitive
+        dependencies - the FileDoc must have been created by a CodeBaseDoc for
+        this field to exist.
+
+        >>> FileDoc('', read_file('examples/module_closure.js')).dependencies
+        ['module.js']
+        >>> FileDoc('subclass.js', read_file('examples/subclass.js')).dependencies
+        ['module_closure.js', 'class.js']
+
+        """
+        return self._module_prop('dependencies')
+
+    @property
+    def all_dependencies(self):
+        return self._module_prop('all_dependencies')
 
     def _filtered_iter(self, pred):
         return (self.comments[name] for name in self.order 
@@ -672,6 +785,12 @@ class ClassDoc(CommentDoc):
 
     @property
     def superclass(self):
+        """
+        Returns the immediate superclass name of the class, as a string.  For
+        the full inheritance chain, use the `all_superclasses` property, which
+        returns a list of objects and only works if this ClassDoc was created
+        from a CodeBaseDoc.
+        """
         return self.get('extends') or self.get('base')
 
     @property
@@ -800,9 +919,9 @@ def topological_sort(dependencies, start_nodes):
 
 def find_dependencies(start_nodes, js_doc):
     """ 
-    Sorts the dependency graph, taking in a list of starting filenames and a 
-    hash from JS filename to parsed documentation.  Returns an ordered list 
-    of transitive dependencies such that no module appears before its
+    Sorts the dependency graph, taking in a list of starting module names and a
+    CodeBaseDoc (or equivalent dictionary).  Returns an ordered list of
+    transitive dependencies such that no module appears before its
     dependencies.
     """
     return topological_sort(*build_dependency_graph(start_nodes, js_doc))
@@ -857,6 +976,18 @@ Cookbook of common tasks:
   $ %(name)s build -o /var/www/htdocs/jqdocs
 """ % {'name': os.path.basename(command_name) }
 
+def get_path_list(opts):
+    """
+    Returns a list of all root paths where JS files can be found, given the
+    command line options for this script.
+    """
+    paths = []
+    for opt, arg in opts:
+        if opt in ('-i', '--input'):
+            return [line.strip() for line in sys.stdin.readlines()]
+        elif opt in ('-p', '--jspath'):
+            paths.append(arg)
+    return paths or [os.getcwd()]
 
 def main():
     """
