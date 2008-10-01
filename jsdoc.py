@@ -30,7 +30,7 @@ import cgi
 ##### INPUT/OUTPUT #####
 
 def warn(format, *args):
-    sys.stderr.write(format % args)
+    sys.stderr.write(format % args + '\n')
 
 def is_js_file(filename):
     """
@@ -285,21 +285,13 @@ def parse_comment(doc_comment, next_line):
     return tags
 
 def parse_comments_for_file(filename):
+    """
+    Returns a list of all parsed comments in a file.  Mostly for testing &
+    interactive use.
+    """
     return [parse_comment(strip_stars(comment), next_line)
             for comment, next_line in get_doc_comments(read_file(filename))]
 
-def make_comment(next_line, parsed_comment):
-    """
-    Creates the appropriate Doc class for a next_line, parsed_comment pair.
-    """
-    if 'fileoverview' in parsed_comment:
-        parsed_comment.name = 'file_overview'
-        return parsed_comment
-
-    function_name = parsed_comment.get('function') or \
-                    guess_function_name(next_line, parsed_comment)
-    if function_name:
-        return 
 
 #### Classes #####
 
@@ -314,13 +306,58 @@ class FileDoc(object):
         self.name = file_name
         self.order = []
         self.comments = {}
-        for comment in get_doc_comments(file_text):
-            parsed_comment = make_comment(parse_comment(strip_stars(comment)))
-            self.order.append(parse_comment.name)
-            self.comments[parse_comment.name] = parse_comment
+        is_first = True
+        for comment, next_line in get_doc_comments(file_text):
+            raw = parse_comment(strip_stars(comment), next_line)
+
+            if raw.get('function') or raw.get('guessed_function'):
+                obj = FunctionDoc(raw)
+            elif raw.get('class') or raw.get('constructor'):
+                obj = ClassDoc(raw)
+            elif raw.get('fileoverview') or is_first:
+                obj = ModuleDoc(raw)
+            else:
+                continue
+
+            self.order.append(obj.name)
+            self.comments[obj.name] = obj
+            is_first = False
+
+        for method in self.methods:
+            try:
+                self.comments[method.member_of].add_method(method)
+            except AttributeError:
+                warn('member_of %s of %s is not a class', 
+                            method.member_of, method.name)
+            except KeyError:
+                pass
 
     def __str__(self):
         return "Docs for file " + self.name
+
+    def keys(self):
+        """
+        Returns all legal names for doc comments.
+
+        >>> file = FileDoc('module.js', read_file('examples/module.js'))
+        >>> file.keys()[1]
+        'the_first_function'
+        >>> file.keys()[4]
+        'not_auto_discovered'
+
+        """
+        return self.order
+
+    def values(self):
+        """
+        Same as list(file_doc).
+
+        >>> file = FileDoc('module.js', read_file('examples/module.js'))
+        >>> file.values()[0].doc[:30]
+        'This is the module documentati'
+
+        """
+        return list(self)
 
     def __iter__(self):
         """
@@ -328,18 +365,34 @@ class FileDoc(object):
         """
         return (self.comments[name] for name in self.order)
 
-    def __getitem__(self, name):
+    def __getitem__(self, index):
         """
-        Returns the specific method/function/class from the file.
-        """
-        return self.comments[name]
+        If `index` is a string, returns the named method/function/class 
+        from the file.
 
-    def _module_prop(self, name, default=''):
-        return self.comments['file_overview'].get(prop, default)
+        >>> file = FileDoc('module.js', read_file('examples/module.js'))
+        >>> file['the_second_function'].doc
+        'This is the documentation for the second function.'
+
+        If `index` is an integer, returns the ordered comment from the file.
+
+        >>> file[0].name
+        'file_overview'
+        >>> file[0].doc[:30]
+        'This is the module documentati'
+
+        """
+        if isinstance(index, int):
+            return self.comments[self.order[index]]
+        else:
+            return self.comments[index]
+
+    def _module_prop(self, name):
+        return getattr(self.comments['file_overview'], name)
 
     @property
     def doc(self):
-        return self._module_prop('body')
+        return self._module_prop('doc')
 
     @property
     def author(self):
@@ -351,11 +404,7 @@ class FileDoc(object):
 
     @property
     def dependencies(self):
-        val = self._module_prop('dependency', [])
-        if isinstance(val, list):
-            return val
-        else:
-            return [val]
+        return self._module_prop('dependency')
 
     def _filtered_iter(self, pred):
         return (self.comments[name] for name in self.order 
@@ -364,25 +413,49 @@ class FileDoc(object):
     @property
     def functions(self):
         """
-        Returns all standalone functions in the file, in textual order.
+        Returns a generator of all standalone functions in the file, in textual
+        order.
+
+        >>> file = FileDoc('module.js', read_file('examples/module.js'))
+        >>> list(file.functions)[0].name
+        'the_first_function'
+        >>> list(file.functions)[3].name
+        'not_auto_discovered'
+
         """
         def is_function(comment):
-            return isinstance(comment, FunctionDoc) \
-                    and comment.member_of is None
+            return isinstance(comment, FunctionDoc) and not comment.member_of
         return self._filtered_iter(is_function)
 
     @property
     def methods(self):
         """
-        Returns all member functions in the file, in textual order.
+        Returns a generator of all member functions in the file, in textual
+        order.  
+
+        >>> file = FileDoc('class.js', read_file('examples/class.js'))
+        >>> file.methods.next().name
+        'first_method'
+
         """
         def is_method(comment):
-            return isinstance(comment, FunctionDoc) \
-                    and comment.member_of is not None
+            return isinstance(comment, FunctionDoc) and comment.member_of
         return self._filtered_iter(is_method)
 
     @property
     def classes(self):
+        """
+        Returns a generator of all classes in the file, in textual order.
+
+        >>> file = FileDoc('class.js', read_file('examples/class.js'))
+        >>> cls = file.classes.next()
+        >>> cls.name
+        'MyClass'
+        >>> cls.methods[0].name
+        'first_method'
+
+        """
+
         return self._filtered_iter(lambda c: isinstance(c, ClassDoc))
 
 class CommentDoc(object):
@@ -393,7 +466,10 @@ class CommentDoc(object):
         self.parsed = parsed_comment
 
     def __str__(self):
-        return "Docs for function " + self.name
+        return "Docs for " + self.name
+
+    def __repr__(self):
+        return str(self)
 
     def __getitem__(self, tag_name):
         return self.get(tag_name)
@@ -417,6 +493,30 @@ class CommentDoc(object):
         else:
             return [val]
 
+    @property
+    def doc(self):
+        return self.get('doc')
+
+class ModuleDoc(CommentDoc):
+    """
+    Represents the top-level fileoverview documentation.  Much of this is
+    proxied behind FileDoc, and should be accessed through that.  This class
+    is to ensure consistency when the doc comments of a class are iterated
+    through.
+    """
+
+    @property
+    def name(self): return 'file_overview'
+
+    @property
+    def author(self): return self.get('author')
+
+    @property
+    def version(self): return self.get('version')
+
+    @property
+    def dependencies(self): return self.get_as_list('dependency')
+
 class FunctionDoc(CommentDoc):
     r"""
     Represents documentation for a single function or method.  Takes a parsed
@@ -436,10 +536,6 @@ class FunctionDoc(CommentDoc):
     @property
     def name(self): 
         return self.get('guessed_function') or self.get('function')
-
-    @property
-    def doc(self):
-        return self.get('doc')
 
     @property
     def params(self):
@@ -561,10 +657,10 @@ class ClassDoc(CommentDoc):
     """
     Represents documentation for a single class.
     """
-    # The 'methods' attribute should be set externally after creation to a
-    # list of methods
     def __init__(self, parsed_comment):
-        super(FunctionDoc, self).__init__(parsed_comment)
+        super(ClassDoc, self).__init__(parsed_comment)
+        self.methods = []
+        # Methods are added externally with add_method, after construction
 
     @property
     def name(self):
@@ -573,6 +669,9 @@ class ClassDoc(CommentDoc):
     @property
     def superclass(self):
         return self.get('base')
+
+    def add_method(self, method):
+        self.methods.append(method)
 
 class ParamDoc(object):
     """
