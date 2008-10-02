@@ -355,7 +355,7 @@ class CodeBaseDoc(dict):
 
     def build_dependencies(self):
         """
-        >>> CodeBaseDoc(['examples'])['subclass.js'].all_dependencies
+        >>> CodeBaseDoc(['examples'])['subclass.js'].module_info.all_dependencies
         ['module.js', 'module_closure.js', 'class.js', 'subclass.js']
         """
         for module in self.values():
@@ -414,11 +414,8 @@ class CodeBaseDoc(dict):
         """
         Builds basic HTML for the full module index.
         """
-        def entry_html(file):
-            return ('<dt><a href = "%(name)s">%(name)s</a></dt>\n' +
-                    '<dd>%(short_doc)s</dd>') % file.to_dict()
         return '<dl>\n%s\n</dl>' % '\n'.join(
-                entry_html(f) for f in self.values())
+                make_index(f) for f in self.values())
 
 class FileDoc(object):
     """
@@ -520,44 +517,13 @@ class FileDoc(object):
         """
         self.comments['file_overview'].all_dependencies = dependencies
 
-    def _module_prop(self, name):
-        return getattr(self.comments['file_overview'], name)
+    @property
+    def module_info(self):
+        return self.comments['file_overview']
 
     @property
-    def doc(self):
-        return self._module_prop('doc')
-
-    @property
-    def short_doc(self):
-        return self._module_prop('short_doc')
-
-    @property
-    def author(self):
-        return self._module_prop('author')
-
-    @property
-    def version(self):
-        return self._module_prop('version')
-
-    @property
-    def dependencies(self):
-        """
-        Returns the immediate dependencies of a module (only those that are
-        explicitly declared).  Use the `all_dependencies` field for transitive
-        dependencies - the FileDoc must have been created by a CodeBaseDoc for
-        this field to exist.
-
-        >>> FileDoc('', read_file('examples/module_closure.js')).dependencies
-        ['module.js']
-        >>> FileDoc('subclass.js', read_file('examples/subclass.js')).dependencies
-        ['module_closure.js', 'class.js']
-
-        """
-        return self._module_prop('dependencies')
-
-    @property
-    def all_dependencies(self):
-        return self._module_prop('all_dependencies')
+    def url(self):
+        return self.name + '.html'
 
     def _filtered_iter(self, pred):
         return (self.comments[name] for name in self.order 
@@ -614,19 +580,34 @@ class FileDoc(object):
         return [comment.to_dict() for comment in self]
 
     def to_html(self):
-        # TODO: finish this, then to_html for each CommentDoc
+        vars = {
+            'doc': self.doc,
+            'module_info': self.module_info.to_html(),
+            'function_index': '\n'.join(make_index(fn) for fn in self.functions),
+            'class_index': '\n'.join(make_index(cls) for cls in self.classes),
+            'function_body': '\n'.join(fn.to_html() for fn in self.functions),
+            'class_body': '\n'.join(cls.to_html() for cls in self.classes)
+        }
         return """
 <h1>Module documentation for %(name)s</h1>
 %(doc)s
+<h2>Module info</h2>
+<dl class = "info">
+%(module_info)s
+</dl>
 <h2>Function Index</h2>
+<dl class = "functions">
 %(function_index)s
+</dl>
 <h2>Class Index</h2>
+<dl class = "classes">
 %(class_index)s
+</dl>
 <h2>Functions</h2>
 %(function_body)s
 <h2>Classes</h2>
-%(function)s
-"""
+%(class_body)s
+""" % vars
 
 class CommentDoc(object):
     """
@@ -671,25 +652,18 @@ class CommentDoc(object):
         return self.get('doc')
 
     @property
-    def short_doc(self): 
-        return first_sentence(self.doc)
+    def url(self):
+        return '#' + self.name
 
     def to_json(self):
         return encode_json(self.to_dict())
 
-    def to_html(self):
-        return self.DEFAULT_HTML_STRING % self.to_dict()
-
     def to_dict(self):
-        vars = self.parsed.copy()
-        vars['short_doc'] = self.short_doc
+        return self.parsed.copy()
 
 class ModuleDoc(CommentDoc):
     """
-    Represents the top-level fileoverview documentation.  Much of this is
-    proxied behind FileDoc, and should be accessed through that.  This class
-    is to ensure consistency when the doc comments of a class are iterated
-    through.
+    Represents the top-level fileoverview documentation.
     """
 
     @property
@@ -699,10 +673,29 @@ class ModuleDoc(CommentDoc):
     def author(self): return self.get('author')
 
     @property
+    def organization(self): return self.get('organization')
+
+    @property
+    def license(self): return self.get('license')
+
+    @property
     def version(self): return self.get('version')
 
     @property
-    def dependencies(self): return self.get_as_list('dependency')
+    def dependencies(self): 
+        """
+        Returns the immediate dependencies of a module (only those that are
+        explicitly declared).  Use the `all_dependencies` field for transitive
+        dependencies - the FileDoc must have been created by a CodeBaseDoc for
+        this field to exist.
+
+        >>> FileDoc('', read_file('examples/module_closure.js')).module_info.dependencies
+        ['module.js']
+        >>> FileDoc('subclass.js', read_file('examples/subclass.js')).module_info.dependencies
+        ['module_closure.js', 'class.js']
+
+        """
+        return self.get_as_list('dependency')
 
     def to_dict(self):
         vars = super(ModuleDoc, self).to_dict()
@@ -713,6 +706,19 @@ class ModuleDoc(CommentDoc):
         except AttributeError:
             vars['all_dependencies'] = []
         return vars
+
+    def to_html(self):
+        html = ''
+        tag_line = '<dt>%s</dt><dd>%s</dd'
+        for key in ('author', 'organization', 'version', 'license'):
+            val = getattr(self, key)
+            if val:
+                html += tag_line % (key, val)
+        for key in ('dependencies', 'all_dependencies'):
+            val = getattr(self, key)
+            html += tag_line % (key, 
+                    ', '.join('<a href = "%s.html">%s</a>' % (val, val)))
+        return html
 
 class FunctionDoc(CommentDoc):
     r"""
@@ -989,7 +995,7 @@ def build_dependency_graph(start_nodes, js_doc):
     dependencies = {}
     start_sort = []
     def add_vertex(file):
-        in_degree = len(js_doc[file].dependencies)
+        in_degree = len(js_doc[file].module_info.dependencies)
         dependencies[file] = [in_degree, []]
         queue.append(file)
         if in_degree == 0:
@@ -1002,7 +1008,7 @@ def build_dependency_graph(start_nodes, js_doc):
     for file in start_nodes:
         add_vertex(file)
     for file in queue:
-        for dependency in js_doc[file].dependencies:
+        for dependency in js_doc[file].module_info.dependencies:
             if dependency not in js_doc:
                 raise MissingDependency(file, dependency)
             if not is_in_graph(dependency):
@@ -1049,6 +1055,14 @@ def build_html_page(title, body):
         %s
     </body>
 </html>""" % (title, body)
+
+def make_index(entity):
+    return ('<dt><a href = "%(url)s">%(name)s</a></dt>\n' +
+            '<dd>%(doc)s</dd>') % {
+        'name': entity.name,
+        'url': entity.url,
+        'doc': first_sentence(entity.doc)
+    }
 
 ##### Command-line functions #####
 
