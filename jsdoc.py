@@ -39,6 +39,14 @@ except ImportError:
             raise ImportError(
                     "Either cjson or simplejson is required for JSON encoding")
 
+def first_sentence(str):
+    """
+    Returns the first sentence of a string - everything up to the period,
+    or the whole text if there is no period.
+    """
+    index = str.find('.')
+    return index != -1 and str[0:index] or str
+
 ##### INPUT/OUTPUT #####
 
 def warn(format, *args):
@@ -402,6 +410,16 @@ class CodeBaseDoc(dict):
     def to_dict(self):
         return dict((key, val.to_dict()) for key, val in self.items())
 
+    def to_html(self):
+        """
+        Builds basic HTML for the full module index.
+        """
+        def entry_html(file):
+            return ('<dt><a href = "%(name)s">%(name)s</a></dt>\n' +
+                    '<dd>%(short_doc)s</dd>') % file.to_dict()
+        return '<dl>\n%s\n</dl>' % '\n'.join(
+                entry_html(f) for f in self.values())
+
 class FileDoc(object):
     """
     Represents documentaion for an entire file.  The constructor takes the
@@ -510,6 +528,10 @@ class FileDoc(object):
         return self._module_prop('doc')
 
     @property
+    def short_doc(self):
+        return self._module_prop('short_doc')
+
+    @property
     def author(self):
         return self._module_prop('author')
 
@@ -591,6 +613,21 @@ class FileDoc(object):
     def to_dict(self):
         return [comment.to_dict() for comment in self]
 
+    def to_html(self):
+        # TODO: finish this, then to_html for each CommentDoc
+        return """
+<h1>Module documentation for %(name)s</h1>
+%(doc)s
+<h2>Function Index</h2>
+%(function_index)s
+<h2>Class Index</h2>
+%(class_index)s
+<h2>Functions</h2>
+%(function_body)s
+<h2>Classes</h2>
+%(function)s
+"""
+
 class CommentDoc(object):
     """
     Base class for all classes that represent a parsed comment of some sort.
@@ -633,6 +670,10 @@ class CommentDoc(object):
     def doc(self):
         return self.get('doc')
 
+    @property
+    def short_doc(self): 
+        return first_sentence(self.doc)
+
     def to_json(self):
         return encode_json(self.to_dict())
 
@@ -640,7 +681,8 @@ class CommentDoc(object):
         return self.DEFAULT_HTML_STRING % self.to_dict()
 
     def to_dict(self):
-        return self.parsed.copy()
+        vars = self.parsed.copy()
+        vars['short_doc'] = self.short_doc
 
 class ModuleDoc(CommentDoc):
     """
@@ -995,6 +1037,18 @@ def find_dependencies(start_nodes, js_doc):
     dependencies.
     """
     return topological_sort(*build_dependency_graph(start_nodes, js_doc))
+
+##### HTML utilities #####
+def build_html_page(title, body):
+    """
+    Builds the simple tag skeleton for a title and body.
+    """
+    return """<html>
+    <head><title>%s</title></head>
+    <body>
+        %s
+    </body>
+</html>""" % (title, body)
 
 ##### Command-line functions #####
 
