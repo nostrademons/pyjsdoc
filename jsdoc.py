@@ -404,8 +404,7 @@ class CodeBaseDoc(dict):
         """
         Builds basic HTML for the full module index.
         """
-        return '<dl>\n%s\n</dl>' % '\n'.join(
-                make_index(f) for f in self.values())
+        return make_index('all_modules', self.values())
 
 class FileDoc(object):
     """
@@ -570,35 +569,19 @@ class FileDoc(object):
         return [comment.to_dict() for comment in self]
 
     def to_html(self):
-        vars = {
-            'name': self.name,
-            'doc': self.module_info.doc,
-            'module_info': self.module_info.to_html(),
-            'function_index': '\n'.join(make_index(fn) for fn in self.functions),
-            'class_index': '\n'.join(make_index(cls) for cls in self.classes),
-            'function_body': '\n'.join(fn.to_html() for fn in self.functions),
-            'class_body': '\n'.join(cls.to_html() for cls in self.classes)
-        }
-        return """
-<h1>Module documentation for %(name)s</h1>
-%(doc)s
-<h2>Module Info</h2>
-<dl class = "info">
-%(module_info)s
-</dl>
-<h2>Function Index</h2>
-<dl class = "functions">
-%(function_index)s
-</dl>
-<h2>Class Index</h2>
-<dl class = "classes">
-%(class_index)s
-</dl>
-<h2>Functions</h2>
-%(function_body)s
-<h2>Classes</h2>
-%(class_body)s
-""" % vars
+        vars = [
+            ('module_info', self.module_info.to_html()),
+            ('function_index', make_index('functions', self.functions)),
+            ('class_index', make_index('classes', self.classes)),
+            ('function_body', '\n'.join(fn.to_html() for fn in self.functions)),
+            ('class_body', '\n'.join(cls.to_html() for cls in self.classes))
+        ]
+        html = '<h1>Module documentation for %s</h1>\n%s' % (
+                self.name, self.module_info.doc)
+        for key, html_text in vars:
+            if html_text:
+                html += '<h2>%s</h2>\n%s' % (printable(key), html_text)
+        return html
 
 class CommentDoc(object):
     """
@@ -711,7 +694,10 @@ class ModuleDoc(CommentDoc):
             build_line(key, lambda val: val, lambda val: val)
         build_line('dependencies', lambda val: val, build_dependency)
         build_line('all_dependencies', lambda val: len(val) > 1, build_dependency)
-        return html
+        if html:
+            return '<dl class = "module_index">\n%s\n</dl>\n' % html
+        else:
+            return ''
 
 class FunctionDoc(CommentDoc):
     r"""
@@ -1055,13 +1041,19 @@ def build_html_page(title, body):
     </body>
 </html>""" % (title, body)
 
-def make_index(entity):
-    return ('<dt><a href = "%(url)s">%(name)s</a></dt>\n' +
-            '<dd>%(doc)s</dd>') % {
-        'name': entity.name,
-        'url': entity.url,
-        'doc': first_sentence(entity.doc)
-    }
+def make_index(css_class, entities):
+    def make_entry(entity):
+        return ('<dt><a href = "%(url)s">%(name)s</a></dt>\n' +
+                '<dd>%(doc)s</dd>') % {
+            'name': entity.name,
+            'url': entity.url,
+            'doc': first_sentence(entity.doc)
+        }
+    entry_text = '\n'.join(make_entry(val) for val in entities)
+    if entry_text:
+        return '<dl class = "%s">\n%s\n</dl>' % (css_class, entry_text)
+    else:
+        return ''
 
 def htmlize_paragraphs(text):
     """
