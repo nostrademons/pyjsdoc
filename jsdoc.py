@@ -43,9 +43,16 @@ def first_sentence(str):
     """
     Returns the first sentence of a string - everything up to the period,
     or the whole text if there is no period.
+
+    >>> first_sentence('')
+    ''
+    >>> first_sentence('Incomplete')
+    ''
+    >>> first_sentence('The first sentence.  This is ignored.')
+    'The first sentence.'
+
     """
-    index = str.find('.')
-    return index != -1 and str[0:index] or str
+    return str[0:str.find('.') + 1]
 
 ##### INPUT/OUTPUT #####
 
@@ -686,14 +693,17 @@ class ModuleDoc(CommentDoc):
         def build_line(key, include_pred, format_fn):
             val = getattr(self, key)
             if include_pred(val):
-                html += '<dt>%s</dt><dd>%s</dd' % (printable(key), format_fn(val))
+                return '<dt>%s</dt><dd>%s</dd' % (printable(key), format_fn(val))
+            else:
+                return ''
         def build_dependency(val):
             return ', '.join('<a href = "%s.html">%s</a>' % (name, name)
                              for name in val)
         for key in ('author', 'organization', 'version', 'license'):
-            build_line(key, lambda val: val, lambda val: val)
-        build_line('dependencies', lambda val: val, build_dependency)
-        build_line('all_dependencies', lambda val: len(val) > 1, build_dependency)
+            html += build_line(key, lambda val: val, lambda val: val)
+        html += build_line('dependencies', lambda val: val, build_dependency)
+        html += build_line('all_dependencies', lambda val: len(val) > 1, 
+                                                build_dependency)
         if html:
             return '<dl class = "module_index">\n%s\n</dl>\n' % html
         else:
@@ -1148,10 +1158,11 @@ def main():
         usage(sys.argv[0])
         sys.exit(2)
 
-    if '--test' in opts:
-        import doctest
-        doctest.testmod()
-        sys.exit(0)
+    for opt, arg in opts:
+        if opt == '--test':
+            import doctest
+            doctest.testmod()
+            sys.exit(0)
 
     js_paths = get_path_list(opts)
     docs = CodeBaseDoc(js_paths)
