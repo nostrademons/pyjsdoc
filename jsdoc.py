@@ -914,7 +914,10 @@ class ClassDoc(CommentDoc):
         return vars
 
     def to_html(self):
-        return 'TODO'
+        return ('<a name = "%s" />\n<div class = "jsclass">\n' + 
+                '<h3>%s</h3>\n%s\n<h4>Methods</h4>\n%s</div>') % (
+                self.name, self.name, self.doc,
+                '\n'.join(method.to_html() for method in self.methods))
 
 class ParamDoc(object):
     """

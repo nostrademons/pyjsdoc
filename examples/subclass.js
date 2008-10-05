@@ -15,6 +15,7 @@ this.MySubClass = ModuleClosure.make_class(MyClass, {
      * the make_class machinery.
      *
      * @constructor
+     * @member MySubClass
      * @param arg1 The first argument
      * @param arg2 The second argument.
      */
@@ -22,12 +23,16 @@ this.MySubClass = ModuleClosure.make_class(MyClass, {
 
     }
 
-    /** A public method */
+    /** 
+     * A public method.  
+     * @member MySubClass
+     */
     public_method: function(arg1, arg2) {}
 
     /** 
      * A private method 
      * @private
+     * @member MySubClass
      */
     private_method: function(args) {}
 
