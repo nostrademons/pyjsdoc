@@ -582,7 +582,7 @@ class FileDoc(object):
         return """
 <h1>Module documentation for %(name)s</h1>
 %(doc)s
-<h2>Module info</h2>
+<h2>Module Info</h2>
 <dl class = "info">
 %(module_info)s
 </dl>
@@ -700,16 +700,17 @@ class ModuleDoc(CommentDoc):
 
     def to_html(self):
         html = ''
-        tag_line = '<dt>%s</dt><dd>%s</dd'
-        for key in ('author', 'organization', 'version', 'license'):
+        def build_line(key, include_pred, format_fn):
             val = getattr(self, key)
-            if val:
-                html += tag_line % (printable(key), val)
-        for key in ('dependencies', 'all_dependencies'):
-            dependencies = getattr(self, key)
-            html += tag_line % (printable(key), ', '.join(
-                '<a href = "%s.html">%s</a>' % (name, name)
-                for name in dependencies))
+            if include_pred(val):
+                html += '<dt>%s</dt><dd>%s</dd' % (printable(key), format_fn(val))
+        def build_dependency(val):
+            return ', '.join('<a href = "%s.html">%s</a>' % (name, name)
+                             for name in val)
+        for key in ('author', 'organization', 'version', 'license'):
+            build_line(key, lambda val: val, lambda val: val)
+        build_line('dependencies', lambda val: val, build_dependency)
+        build_line('all_dependencies', lambda val: len(val) > 1, build_dependency)
         return html
 
 class FunctionDoc(CommentDoc):
