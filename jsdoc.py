@@ -580,8 +580,8 @@ class FileDoc(object):
             ('module_info', self.module_info.to_html()),
             ('function_index', make_index('functions', self.functions)),
             ('class_index', make_index('classes', self.classes)),
-            ('function_body', '\n'.join(fn.to_html() for fn in self.functions)),
-            ('class_body', '\n'.join(cls.to_html() for cls in self.classes))
+            ('functions', '\n'.join(fn.to_html() for fn in self.functions)),
+            ('classes', '\n'.join(cls.to_html() for cls in self.classes))
         ]
         html = '<h1>Module documentation for %s</h1>\n%s' % (
                 self.name, htmlize_paragraphs(self.module_info.doc))
@@ -808,18 +808,18 @@ class FunctionDoc(CommentDoc):
         return ParamDoc(ret)
 
     @property
-    def throws(self):
+    def exceptions(self):
         """
         Returns a list of ParamDoc objects (with empty names) of the
         exception tags for the function.
 
         >>> comments = parse_comments_for_file('examples/module_closure.js')
         >>> fn1 = FunctionDoc(comments[1])
-        >>> fn1.throws[0].doc
+        >>> fn1.exceptions[0].doc
         'Another exception'
-        >>> fn1.throws[1].doc
+        >>> fn1.exceptions[1].doc
         'A fake exception'
-        >>> fn1.throws[1].type
+        >>> fn1.exceptions[1].type
         'String'
 
         """
@@ -855,7 +855,7 @@ class FunctionDoc(CommentDoc):
             'name': self.name,
             'params': [param.to_dict() for param in self.params],
             'options': [option.to_dict() for option in self.options],
-            'throws': [exc.to_dict() for exc in self.throws],
+            'exceptions': [exc.to_dict() for exc in self.exceptions],
             'return_val': self.return_val.to_dict(),
             'is_private': self.is_private,
             'is_constructor': self.is_constructor,
@@ -864,7 +864,16 @@ class FunctionDoc(CommentDoc):
         return vars
 
     def to_html(self):
-        return 'TODO'
+        body = ''
+        for section in ('params', 'options', 'exceptions'):
+            val = getattr(self, section)
+            if val:
+                body += '<h5>%s</h5>\n<dl class = "%s">%s</dl>' % (
+                        printable(section), section, 
+                        '\n'.join(param.to_html() for param in val))
+        return ('<a name = "%s" />\n<div class = "function">\n' + 
+                '<h4>%s</h4>\n%s\n%s\n</div>\n') % (self.name,
+                self.name, htmlize_paragraphs(self.doc), body)
 
 class ClassDoc(CommentDoc):
     """
@@ -951,6 +960,18 @@ class ParamDoc(object):
             'type': self.type,
             'doc': self.doc
         }
+
+    def to_html(self, css_class=''):
+        """
+        Returns the parameter as a dt/dd pair.
+        """
+        if self.name and self.type:
+            header_text = '%s (%s)' % (self.name, self.type)
+        elif self.type:
+            header_text = self.type
+        else:
+            header_text = self.name
+        return '<dt>%s</dt><dd>%s</dd>' % (header_text, self.doc)
 
 ##### DEPENDENCIES #####
 
