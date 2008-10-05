@@ -308,34 +308,22 @@ class CodeBaseDoc(dict):
     """
     Represents the documentation for an entire codebase.
 
-    This takes a list of root paths and a list of prefixes to chop off the
-    beginning of each filename.  The resulting object acts like a dictionary of
-    FileDoc objects.  
+    This takes a list of root paths.  The resulting object acts like a
+    dictionary of FileDoc objects, keyed by the filename of the file (relative
+    to the source root).
     
-    The dictionary may either be keyed by the basename of the
-    file (the default) or by having ``prefix`` chopped off the beginning of
-    each full filename.  You may pass multiple prefixes as a list; the full
-    filename is tested against each and chopped if it matches.
-
     >>> CodeBaseDoc(['examples']).keys()
     ['module_closure.js', 'module.js', 'class.js', 'subclass.js']
 
     It also handles dependency & subclass analysis, setting the appropriate
     fields on the contained objects.  Note that the keys (after prefix
     chopping) should match the names declared in @dependency or @see tags;
-    otherwise, you may get MissingDependencyErrors:
-
-    >>> CodeBaseDoc(['examples'], '').keys()
-    Traceback (most recent call last):
-    MissingDependency: Couldn't find dependency module.js when processing examples/module_closure.js
+    otherwise, you may get MissingDependencyErrors.
 
     """
 
-    def __init__(self, root_paths, prefix=None):
-        if isinstance(prefix, str):
-            prefix = [prefix]
-
-        self.populate_files(root_paths, prefix)
+    def __init__(self, root_paths):
+        self.populate_files(root_paths, root_paths)
         self.build_dependencies()
         self.build_superclass_lists()
 
@@ -345,6 +333,8 @@ class CodeBaseDoc(dict):
             if prefix is None:
                 return os.path.basename(file_name)
             for pre in prefix:
+                if not pre.endswith('/'):
+                    pre = pre + '/'
                 if file_name.startswith(pre):
                     return file_name[len(pre):]
             return file_name
@@ -581,7 +571,8 @@ class FileDoc(object):
 
     def to_html(self):
         vars = {
-            'doc': self.doc,
+            'name': self.module_info.name,
+            'doc': self.module_info.doc,
             'module_info': self.module_info.to_html(),
             'function_index': '\n'.join(make_index(fn) for fn in self.functions),
             'class_index': '\n'.join(make_index(cls) for cls in self.classes),
@@ -874,6 +865,9 @@ class FunctionDoc(CommentDoc):
         })
         return vars
 
+    def to_html(self):
+        return 'TODO'
+
 class ClassDoc(CommentDoc):
     """
     Represents documentation for a single class.
@@ -911,6 +905,9 @@ class ClassDoc(CommentDoc):
             'method': [method.to_dict() for method in self.methods]
         })
         return vars
+
+    def to_html(self):
+        return 'TODO'
 
 class ParamDoc(object):
     """
@@ -1064,6 +1061,14 @@ def make_index(entity):
         'doc': first_sentence(entity.doc)
     }
 
+def htmlize_paragraphs(text):
+    """
+    Converts paragraphs delimited by blank lines into HTML text enclosed
+    in <p> tags.
+    """
+    paragraphs = re.split('(\r?\n)\s*(\r?\n)', text)
+    return '\n'.join('<p>%s</p>' % paragraph for paragraph in paragraphs)
+
 ##### Command-line functions #####
 
 def usage(command_name):
@@ -1121,9 +1126,7 @@ def get_path_list(opts):
     """
     paths = []
     for opt, arg in opts:
-        if opt in ('-i', '--input'):
-            return [line.strip() for line in sys.stdin.readlines()]
-        elif opt in ('-p', '--jspath'):
+        if opt in ('-p', '--jspath'):
             paths.append(arg)
     return paths or [os.getcwd()]
 
@@ -1131,12 +1134,6 @@ def main():
     """
     Main command-line invocation.
     """
-
-    if '--test' in sys.argv:
-        import doctest
-        doctest.testmod()
-        sys.exit(0)
-
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'p:io:jt', [
             'jspath=', 'input', 'output=', 'json', 'test'])
@@ -1144,38 +1141,31 @@ def main():
         usage(sys.argv[0])
         sys.exit(2)
 
+    if '--test' in opts:
+        import doctest
+        doctest.testmod()
+        sys.exit(0)
+
     js_paths = get_path_list(opts)
-    js_files = get_file_list(js_paths)
+    docs = CodeBaseDoc(js_paths)
+    if args:
+        selected_docs = [docs[file] for file in args if file in docs]
+    else:
+        selected_docs = docs.values()
 
-    try:
-       data_fn = globals()[args[0] + '_data']
-       format_fn = globals()[args[0] + '_format']
-    except (KeyError, IndexError):
-        usage(sys.argv[0])
-        sys.exit(2)
-
-    show_json = False
-    output_file = False
-    for opt, arg in opts:
-        if opt in ['-j', '--json']:
-            show_json = True
-        elif opt in ['-o', '--output']:
-            output_file = arg
-
-    def add_trailing_slash(path):
-        return path + ('/' if not path.endswith('/') else '')
-    js_paths = map(add_trailing_slash, js_paths)
-
-    try:
-        result = data_fn(args, js_paths, js_files)
-        output = show_json and json_format(result) or \
-                 format_fn(args, result, js_files, output_file)
-        if output_file and format_fn != build_format:
-            save_file(output_file, output)
-        else:
-            print output
-    except ArgNotFound, e:
-        print e
+    if len(args) == 1:
+        try:
+            doc = selected_docs[0]
+            save_file(args[0] + '.html', build_html_page(doc.name, doc.to_html()))
+        except IndexError:
+            warn('File %s does not exist', args[0])
+    else:
+        os.mkdir('api')
+        save_file('api/index.html', 
+                build_html_page('Module index', docs.to_html()))
+        for doc in selected_docs:
+            save_file('api/%s.html' % doc.name, 
+                    build_html_page(doc.name, doc.to_html()))
 
 if __name__ == '__main__':
     main()
