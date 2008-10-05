@@ -706,9 +706,10 @@ class ModuleDoc(CommentDoc):
             if val:
                 html += tag_line % (key, val)
         for key in ('dependencies', 'all_dependencies'):
-            val = getattr(self, key)
-            html += tag_line % (key, 
-                    ', '.join('<a href = "%s.html">%s</a>' % (val, val)))
+            dependencies = getattr(self, key)
+            html += tag_line % (key, ', '.join(
+                '<a href = "%s.html">%s</a>' % (name, name)
+                for name in dependencies))
         return html
 
 class FunctionDoc(CommentDoc):
