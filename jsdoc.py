@@ -584,7 +584,7 @@ class FileDoc(object):
             ('class_body', '\n'.join(cls.to_html() for cls in self.classes))
         ]
         html = '<h1>Module documentation for %s</h1>\n%s' % (
-                self.name, self.module_info.doc)
+                self.name, htmlize_paragraphs(self.module_info.doc))
         for key, html_text in vars:
             if html_text:
                 html += '<h2>%s</h2>\n%s' % (printable(key), html_text)
