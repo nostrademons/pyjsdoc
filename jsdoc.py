@@ -571,7 +571,7 @@ class FileDoc(object):
 
     def to_html(self):
         vars = {
-            'name': self.module_info.name,
+            'name': self.name,
             'doc': self.module_info.doc,
             'module_info': self.module_info.to_html(),
             'function_index': '\n'.join(make_index(fn) for fn in self.functions),
@@ -704,10 +704,10 @@ class ModuleDoc(CommentDoc):
         for key in ('author', 'organization', 'version', 'license'):
             val = getattr(self, key)
             if val:
-                html += tag_line % (key, val)
+                html += tag_line % (printable(key), val)
         for key in ('dependencies', 'all_dependencies'):
             dependencies = getattr(self, key)
-            html += tag_line % (key, ', '.join(
+            html += tag_line % (printable(key), ', '.join(
                 '<a href = "%s.html">%s</a>' % (name, name)
                 for name in dependencies))
         return html
@@ -1069,6 +1069,19 @@ def htmlize_paragraphs(text):
     """
     paragraphs = re.split('(\r?\n)\s*(\r?\n)', text)
     return '\n'.join('<p>%s</p>' % paragraph for paragraph in paragraphs)
+
+def printable(id):
+    """
+    Turns a Python identifier into something fit for human consumption.
+
+    >>> printable('author')
+    'Author'
+    >>> printable('all_dependencies')
+    'All Dependencies'
+
+    """
+    return ' '.join(word.capitalize() for word in id.split('_'))
+
 
 ##### Command-line functions #####
 
