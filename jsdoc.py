@@ -26,6 +26,7 @@ import re
 import sys
 import getopt
 import cgi
+import shutil
 
 try:
     import cjson
@@ -1074,7 +1075,10 @@ def build_html_page(title, body):
     Builds the simple tag skeleton for a title and body.
     """
     return """<html>
-    <head><title>%s</title></head>
+    <head>
+        <title>%s</title>
+        <link rel = "stylesheet" type = "text/css" href = "jsdoc.css" />
+    </head>
     <body>
         %s
     </body>
@@ -1211,6 +1215,8 @@ def main():
             os.mkdir('apidocs')
         except OSError:
             pass
+
+        shutil.copy('jsdoc.css', 'apidocs')
 
         save_file('apidocs/index.html', 
                 build_html_page('Module index', docs.to_html()))
