@@ -7,6 +7,10 @@ h1, h2, h3, h4, h5 {
     clear: both;
 }
 
+h4, h5 {
+    margin: 0;
+    padding: 0;
+}
 
 dl {
     display: block;
@@ -38,4 +42,16 @@ dl.module_info dt {
 
 dl.module_info dd {
     width: 50%;
+}
+
+div.jsclass {
+    border: 1px solid black;
+    padding: 15px;
+}
+
+div.function {
+    border: 1px solid black;
+    padding: 10px;
+    margin: 10px 0;
+    background-color: lightgrey;
 }
