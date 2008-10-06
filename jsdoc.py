@@ -411,7 +411,8 @@ class CodeBaseDoc(dict):
         """
         Builds basic HTML for the full module index.
         """
-        return make_index('all_modules', self.values())
+        return '<h1>Module index</h1>\n' + \
+                make_index('all_modules', self.values())
 
 class FileDoc(object):
     """
@@ -516,6 +517,10 @@ class FileDoc(object):
     @property
     def module_info(self):
         return self.comments['file_overview']
+
+    @property
+    def doc(self):
+        return self.module_info.doc
 
     @property
     def url(self):
@@ -1202,11 +1207,15 @@ def main():
         except IndexError:
             warn('File %s does not exist', args[0])
     else:
-        os.mkdir('api')
-        save_file('api/index.html', 
+        try:
+            os.mkdir('apidocs')
+        except OSError:
+            pass
+
+        save_file('apidocs/index.html', 
                 build_html_page('Module index', docs.to_html()))
         for doc in selected_docs:
-            save_file('api/%s.html' % doc.name, 
+            save_file('apidocs/%s.html' % doc.name, 
                     build_html_page(doc.name, doc.to_html()))
 
 if __name__ == '__main__':
