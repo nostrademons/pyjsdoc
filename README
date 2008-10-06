@@ -1,0 +1,6 @@
+Python port of JSDoc.
+
+Feature list TODO.  For now, look in the examples and the usage note:
+
+./jsdoc.py -p examples
+./jsdoc.py --help

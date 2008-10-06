@@ -1123,51 +1123,17 @@ def printable(id):
 
 def usage(command_name):
     print """
-Usage: %(name)s <command> [options]
-
-Available commands:
-
-  depend [start files]: Generate a list of all dependencies of the specified
-                        start files.
-  doc [filename]: Writes HTML documentation for specified file to STDOUT
-  build: Build HTML documentation for all files on the JSPath
+Usage: %(name)s [options] file1.js file2.js ...
 
 By default, this tool recursively searches the current directory for .js files
-to build up its dependency database.  This can be changed with the --input or
---jspath options (see below).
+to build up its dependency database.  This can be changed with the --jspath option (see below).  It then outputs the JSDoc for the files on the command-line (if no files are listed, it generates the docs for the whole sourcebase).  If only a single file is listed, the HTML page is placed in the current directory; otherwise, all pages and a module index are placed in an apidocs subdirectory.
 
 Available options:
 
   -p, --jspath  Directory to search for JS libraries (multiple allowed)
-  -i, --input   Read available JS files from STDIN 
-  -o, --output  Output to file (or directory, for build) instead of STDOUT
-  -j, --json    Write output in JSON format (requires python-json module)
   -h, --help    Print usage information and exit
   -t, --test    Run PyJSDoc unit tests
-
-Cookbook of common tasks:
-
-  Find dependencies of the Dimensions plugin in the jQuery CVS repository, 
-  filtering out packed files from the search path:
-
-  $ find trunk/plugins -name "*.js" | grep -v pack | %(name)s -i depend jquery.dimensions.js
-
-  Concatenate dependent plugins into a single file for web page:
-
-  $ %(name)s depend myplugin1.js myplugin2.js | xargs cat > scripts.js
-
-  Read documentation information for form plugin (including full dependencies),
-  and include on a PHP web page using the PHP Services_JSON module:
-
-  <?php
-  $json = new Services_JSON();
-  $jsdoc = $json->decode(`jsdoc doc jquery.form.js -j -p trunk/plugins`);
-  ?>
-
-  Build documentation for all plugins on your system:
-
-  $ %(name)s build -o /var/www/htdocs/jqdocs
-""" % {'name': os.path.basename(command_name) }
+"""
 
 def get_path_list(opts):
     """
