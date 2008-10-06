@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 """
 Python library & command-line tool for performing a variety of build
 & deployment tasks of jQuery plugins.  
@@ -11,14 +10,8 @@ This offers the following features:
 * Extract metadata from doc comments
 * Generate documentation for a set of files.
 
-It depends on the existence of certain @tags in the documentation.  These are:
+Tag reference is similar to JSDoc: http://jsdoc.sourceforge.net/#tagref.  See usage() for command line options.
 
-* @module: Display name of the module
-* @author: Author's name
-* @version: Version number
-* @organization: Name of sponsoring organization, if any
-* @license: License type (BSD/MIT/GPL/LGPL/Artistic/etc.)
-* @dependency: Filename of parent plugin.  Multiple tags allowed
 """
 
 import os
@@ -402,11 +395,26 @@ class CodeBaseDoc(dict):
         """
         return self._module_index('classes')
 
-    def to_json(self):
-        return encode_json(self.to_dict())
+    def to_json(self, files=None):
+        """
+        Converts the full CodeBaseDoc into JSON text.  The optional `files`
+        list lets you restrict the JSON dict to include only specific files.
+        """
+        return encode_json(self.to_dict(files))
 
-    def to_dict(self):
-        return dict((key, val.to_dict()) for key, val in self.items())
+    def to_dict(self, files=None):
+        """
+        Converts the CodeBaseDoc into a dictionary containing the to_dict()
+        representations of each contained file.  The optional `files` list
+        lets you restrict the dict to include only specific files.
+
+        >>> CodeBaseDoc(['examples']).to_dict(['class.js']).get('module.js')
+        >>> CodeBaseDoc(['examples']).to_dict(['class.js'])['class.js'][0]['name']
+        'MyClass'
+
+        """
+        keys = files or self.keys()
+        return dict((key, self[key].to_dict()) for key in keys)
 
     def to_html(self):
         """
@@ -414,6 +422,27 @@ class CodeBaseDoc(dict):
         """
         return '<h1>Module index</h1>\n' + \
                 make_index('all_modules', self.values())
+
+    def save_docs(self, files, output_dir=None):
+        if output_dir:
+            try:
+                os.mkdir(output_dir)
+            except OSError:
+                pass
+
+            shutil.copy('jsdoc.css', output_dir)
+            save_file('%s/index.html' % output_dir, 
+                    build_html_page('Module index', self.to_html()))
+        else:
+            output_dir = '.'
+
+        for filename in files:
+            try:
+                doc = self[filename]
+                save_file('%s/%s.html' % (output_dir, doc.name), 
+                        build_html_page(doc.name, doc.to_html()))
+            except KeyError:
+                warn('File %s does not exist', filename)
 
 class FileDoc(object):
     """
@@ -1121,74 +1150,103 @@ def printable(id):
 
 ##### Command-line functions #####
 
-def usage(command_name):
+def usage():
+    command_name = sys.argv[0]
     print """
 Usage: %(name)s [options] file1.js file2.js ...
 
 By default, this tool recursively searches the current directory for .js files
-to build up its dependency database.  This can be changed with the --jspath option (see below).  It then outputs the JSDoc for the files on the command-line (if no files are listed, it generates the docs for the whole sourcebase).  If only a single file is listed, the HTML page is placed in the current directory; otherwise, all pages and a module index are placed in an apidocs subdirectory.
+to build up its dependency database.  This can be changed with the --jspath option (see below).  It then outputs the JSDoc for the files on the command-line (if no files are listed, it generates the docs for the whole sourcebase).  If only a single file is listed and no output directory is specified, the HTML page is placed in the current directory; otherwise, all pages and a module index are placed in the output directory.
 
 Available options:
 
   -p, --jspath  Directory to search for JS libraries (multiple allowed)
-  -h, --help    Print usage information and exit
-  -t, --test    Run PyJSDoc unit tests
-"""
+  -o, --output  Output directory for building full documentation (default: apidocs)
+  --help        Print usage information and exit
+  --test        Run PyJSDoc unit tests
+  -j, --json    Output doc parse tree in JSON instead of building HTML
+  -d, --dependencies    Output dependencies for file(s) only
+
+Cookbook of common tasks:
+
+  Find dependencies of the Dimensions plugin in the jQuery CVS repository, 
+  filtering out packed files from the search path:
+
+  $ %(name)s -d -p trunk/plugins jquery.dimensions.js
+
+  Concatenate dependent plugins into a single file for web page:
+
+  $ %(name)s -d rootfile1.js rootfile2.js | xargs cat > scripts.js
+
+  Read documentation information for form plugin (including full dependencies),
+  and include on a PHP web page using the PHP Services_JSON module:
+
+  <?php
+  $json = new Services_JSON();
+  $jsdoc = $json->decode(`%(name)s jquery.form.js -j -p trunk/plugins`);
+  ?>
+
+  Build documentation for all modules on your system:
+
+  $ %(name)s -p ~/svn/js -o /var/www/htdocs/jqdocs
+""" % {'name': os.path.basename(command_name) }
 
 def get_path_list(opts):
     """
     Returns a list of all root paths where JS files can be found, given the
-    command line options for this script.
+    command line options (in dict form) for this script.
     """
     paths = []
-    for opt, arg in opts:
+    for opt, arg in opts.items():
         if opt in ('-p', '--jspath'):
             paths.append(arg)
     return paths or [os.getcwd()]
+
+def run_and_exit_if(opts, action, *names):
+    for name in names:
+        if name in opts:
+            action()
+            sys.exit(0)
+
+def run_doctests():
+    import doctest
+    doctest.testmod()
 
 def main():
     """
     Main command-line invocation.
     """
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'p:io:jt', [
-            'jspath=', 'input', 'output=', 'json', 'test'])
+        opts, args = getopt.gnu_getopt(sys.argv[1:], 'p:o:jdt', [
+            'jspath=', 'output=', 'json', 'dependencies', 'test', 'help'])
+        opts = dict(opts)
     except getopt.GetoptError:
-        usage(sys.argv[0])
+        usage()
         sys.exit(2)
 
-    for opt, arg in opts:
-        if opt == '--test':
-            import doctest
-            doctest.testmod()
-            sys.exit(0)
+    run_and_exit_if(opts, run_doctests, '--test')
+    run_and_exit_if(opts, usage, '--help')
 
     js_paths = get_path_list(opts)
     docs = CodeBaseDoc(js_paths)
     if args:
-        selected_docs = [docs[file] for file in args if file in docs]
+        selected_files = set(docs.keys()) & set(args)
     else:
-        selected_docs = docs.values()
+        selected_files = docs.keys()
 
-    if len(args) == 1:
-        try:
-            doc = selected_docs[0]
-            save_file(args[0] + '.html', build_html_page(doc.name, doc.to_html()))
-        except IndexError:
-            warn('File %s does not exist', args[0])
-    else:
-        try:
-            os.mkdir('apidocs')
-        except OSError:
-            pass
+    def print_json():
+        print docs.to_json(selected_files)
+    run_and_exit_if(opts, print_json, '--json', '-j')
 
-        shutil.copy('jsdoc.css', 'apidocs')
+    def print_dependencies():
+        for dependency in find_dependencies(selected_files, docs):
+            print dependency
+    run_and_exit_if(opts, print_dependencies, '--dependencies', '-d')
 
-        save_file('apidocs/index.html', 
-                build_html_page('Module index', docs.to_html()))
-        for doc in selected_docs:
-            save_file('apidocs/%s.html' % doc.name, 
-                    build_html_page(doc.name, doc.to_html()))
+    output = opts.get('--output') or opts.get('-o')
+    if output is None and len(args) != 1:
+        output = 'apidocs'
+    docs.save_docs(selected_files, output)
 
 if __name__ == '__main__':
     main()
