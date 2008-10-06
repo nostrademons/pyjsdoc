@@ -699,7 +699,7 @@ class ModuleDoc(CommentDoc):
         def build_line(key, include_pred, format_fn):
             val = getattr(self, key)
             if include_pred(val):
-                return '<dt>%s</dt><dd>%s</dd' % (printable(key), format_fn(val))
+                return '<dt>%s</dt><dd>%s</dd>\n' % (printable(key), format_fn(val))
             else:
                 return ''
         def build_dependency(val):
@@ -711,7 +711,7 @@ class ModuleDoc(CommentDoc):
         html += build_line('all_dependencies', lambda val: len(val) > 1, 
                                                 build_dependency)
         if html:
-            return '<dl class = "module_index">\n%s\n</dl>\n' % html
+            return '<dl class = "module_info">\n%s\n</dl>\n' % html
         else:
             return ''
 
