@@ -33,21 +33,6 @@ except ImportError:
             raise ImportError(
                     "Either cjson or simplejson is required for JSON encoding")
 
-def first_sentence(str):
-    """
-    Returns the first sentence of a string - everything up to the period,
-    or the whole text if there is no period.
-
-    >>> first_sentence('')
-    ''
-    >>> first_sentence('Incomplete')
-    ''
-    >>> first_sentence('The first sentence.  This is ignored.')
-    'The first sentence.'
-
-    """
-    return str[0:str.find('.') + 1]
-
 ##### INPUT/OUTPUT #####
 
 def warn(format, *args):
@@ -423,7 +408,7 @@ class CodeBaseDoc(dict):
         return '<h1>Module index</h1>\n' + \
                 make_index('all_modules', self.values())
 
-    def save_docs(self, files, output_dir=None):
+    def save_docs(self, files, output_dir=None, include_private=False):
         if output_dir:
             try:
                 os.mkdir(output_dir)
@@ -440,7 +425,7 @@ class CodeBaseDoc(dict):
             try:
                 doc = self[filename]
                 save_file('%s/%s.html' % (output_dir, doc.name), 
-                        build_html_page(doc.name, doc.to_html()))
+                        build_html_page(doc.name, doc.to_html(include_private)))
             except KeyError:
                 warn('File %s does not exist', filename)
 
@@ -610,13 +595,19 @@ class FileDoc(object):
     def to_dict(self):
         return [comment.to_dict() for comment in self]
 
-    def to_html(self):
+    def to_html(self, include_private=False):
+        if include_private:
+            def visible(fns): return fns
+        else:
+            def visible(fns): 
+                return filter(lambda fn: not fn.is_private, fns)
+
         vars = [
             ('module_info', self.module_info.to_html()),
-            ('function_index', make_index('functions', self.functions)),
+            ('function_index', make_index('functions', visible(self.functions))),
             ('class_index', make_index('classes', self.classes)),
-            ('functions', '\n'.join(fn.to_html() for fn in self.functions)),
-            ('classes', '\n'.join(cls.to_html() for cls in self.classes))
+            ('functions', '\n'.join(fn.to_html() for fn in visible(self.functions))),
+            ('classes', '\n'.join(cls.to_html(include_private) for cls in self.classes))
         ]
         html = '<h1>Module documentation for %s</h1>\n%s' % (
                 self.name, htmlize_paragraphs(self.module_info.doc))
@@ -948,11 +939,12 @@ class ClassDoc(CommentDoc):
         })
         return vars
 
-    def to_html(self):
+    def to_html(self, include_private_methods=False):
         return ('<a name = "%s" />\n<div class = "jsclass">\n' + 
                 '<h3>%s</h3>\n%s\n<h4>Methods</h4>\n%s</div>') % (
                 self.name, self.name, self.doc,
-                '\n'.join(method.to_html() for method in self.methods))
+                '\n'.join(method.to_html() for method in self.methods
+                        if include_private_methods or not method.is_private))
 
 class ParamDoc(object):
     """
@@ -1127,6 +1119,21 @@ def make_index(css_class, entities):
     else:
         return ''
 
+def first_sentence(str):
+    """
+    Returns the first sentence of a string - everything up to the period,
+    or the whole text if there is no period.
+
+    >>> first_sentence('')
+    ''
+    >>> first_sentence('Incomplete')
+    ''
+    >>> first_sentence('The first sentence.  This is ignored.')
+    'The first sentence.'
+
+    """
+    return str[0:str.find('.') + 1]
+
 def htmlize_paragraphs(text):
     """
     Converts paragraphs delimited by blank lines into HTML text enclosed
@@ -1162,6 +1169,7 @@ Available options:
 
   -p, --jspath  Directory to search for JS libraries (multiple allowed)
   -o, --output  Output directory for building full documentation (default: apidocs)
+  --private     Include private functions & methods in output
   --help        Print usage information and exit
   --test        Run PyJSDoc unit tests
   -j, --json    Output doc parse tree in JSON instead of building HTML
@@ -1218,7 +1226,8 @@ def main():
     """
     try:
         opts, args = getopt.gnu_getopt(sys.argv[1:], 'p:o:jdt', [
-            'jspath=', 'output=', 'json', 'dependencies', 'test', 'help'])
+            'jspath=', 'output=', 'private', 'json', 'dependencies', 
+            'test', 'help'])
         opts = dict(opts)
     except getopt.GetoptError:
         usage()
@@ -1246,7 +1255,7 @@ def main():
     output = opts.get('--output') or opts.get('-o')
     if output is None and len(args) != 1:
         output = 'apidocs'
-    docs.save_docs(selected_files, output)
+    docs.save_docs(selected_files, output, '--private' in opts)
 
 if __name__ == '__main__':
     main()

@@ -10,7 +10,7 @@ The syntax of doc comments and set of supported tags is mostly compatible with t
 
 * @see and @link are not supported (there are plans to support them, just haven't gotten around to it yet)
 * @class should be used in a separate doc comment instead of being a tag in the constructor's comment.  Note that the original JSDoc style still works, it'll just pick up the whole constructor's doc comment as class documentation instead of just the @class tag.
-* @ignore and @private are supported, but useless.  PyJSDoc determines which functions/methods to document by the presence of doc comments: undocumented functions never show up in the final documentation.
+* @ignore is supported, but useless.  PyJSDoc determines which functions/methods to document by the presence of doc comments: undocumented functions never show up in the final documentation.
 * Instead of the @requires class dependency tag, PyJSDoc provides an @dependency tag in the fileoverview block, which takes a filename (relative to source path).  This performs transitive dependency analysis on all files in the sourcebase, giving you a list of all files that you need to include to use the specified module.
 * Instead of separate @type and @return tags, you can format an @return or @returns tag like you would a parameter, as "{Type} Description text", and the parser will pick it up.  You can also use the original JSDoc approach.
 * The @fileoverview block supports the additional tags @license and @organization, which take text strings describing the module.
