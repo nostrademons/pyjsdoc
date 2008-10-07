@@ -8,7 +8,6 @@ The complete script and API is in one Python sourcefile - jsdoc.py.  Drop this o
 
 The syntax of doc comments and set of supported tags is mostly compatible with the [JSDoc tag reference](http://jsdoc.sourceforge.net/#tagref), but has some differences because PyJSDoc was originally developed with a codebase that used a more functional (vs. OO) style than JSDoc.  It has the following differences:
 
-* @see and @link are not supported (there are plans to support them, just haven't gotten around to it yet)
 * @class should be used in a separate doc comment instead of being a tag in the constructor's comment.  Note that the original JSDoc style still works, it'll just pick up the whole constructor's doc comment as class documentation instead of just the @class tag.
 * @ignore is supported, but useless.  PyJSDoc determines which functions/methods to document by the presence of doc comments: undocumented functions never show up in the final documentation.
 * Instead of the @requires class dependency tag, PyJSDoc provides an @dependency tag in the fileoverview block, which takes a filename (relative to source path).  This performs transitive dependency analysis on all files in the sourcebase, giving you a list of all files that you need to include to use the specified module.
