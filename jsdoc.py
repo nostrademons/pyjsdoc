@@ -662,6 +662,10 @@ class CommentDoc(object):
     def url(self):
         return '#' + self.name
 
+    @property
+    def see(self):
+        return self.get_as_list('see')
+
     def to_json(self):
         return encode_json(self.to_dict())
 
