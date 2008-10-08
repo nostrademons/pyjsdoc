@@ -36,9 +36,20 @@ except ImportError:
 ##### INPUT/OUTPUT #####
 
 def warn(format, *args):
+    """
+    Print out a warning on STDERR.
+    """
     sys.stderr.write(format % args + '\n')
 
 def flatten(iter_of_iters):
+    """
+    Flatten an iterator of iterators into a single, long iterator, exhausting
+    each subiterator in turn.
+
+    >>> flatten([[1, 2], [3, 4]])
+    [1, 2, 3, 4]
+
+    """
     retval = []
     for val in iter_of_iters:
         retval.extend(val)
@@ -46,7 +57,7 @@ def flatten(iter_of_iters):
 
 def is_js_file(filename):
     """
-    Returns true if the filename ends in .js and is not a packed or
+    Return true if the filename ends in .js and is not a packed or
     minified file (no '.pack' or '.min' in the filename)
 
     >>> is_js_file('jquery.min.js')
@@ -76,13 +87,13 @@ def list_js_files(dir):
 
 def get_file_list(paths):
     """
-    Returns a list of all JS files, given the root paths.
+    Return a list of all JS files, given the root paths.
     """
     return flatten(list_js_files(path) for path in paths)
 
 def read_file(path):
     """
-    Opens a file, reads it into a string, closes the file, and returns
+    Open a file, reads it into a string, closes the file, and returns
     the file text.
     """
     fd = open(path)
@@ -93,7 +104,7 @@ def read_file(path):
 
 def save_file(path, text):
     """
-    Saves a string to a file
+    Save a string to a file
     """
     fd = open(path, 'w')
     try:
@@ -160,7 +171,7 @@ def split_delimited(delimiters, split_by, text):
 
 def get_doc_comments(text):
     r"""
-    Returns a list of all documentation comments in the file text.  Each
+    Return a list of all documentation comments in the file text.  Each
     comment is a pair, with the first element being the comment text and
     the second element being the line after it, which may be needed to
     guess function & arguments.
@@ -173,7 +184,6 @@ def get_doc_comments(text):
     'function the_first_function(arg1, arg2) '
     >>> get_doc_comments(read_file('examples/module.js'))[2][0]
     '/** This is the documentation for the second function. */'
-
 
     """
     def make_pair(match):
@@ -192,7 +202,7 @@ def get_doc_comments(text):
 
 def strip_stars(doc_comment):
     r"""
-    Strips leading stars from a doc comment.  
+    Strip leading stars from a doc comment.  
 
     >>> strip_stars('/** This is a comment. */')
     'This is a comment.'
@@ -206,7 +216,7 @@ def strip_stars(doc_comment):
 
 def split_tag(section):
     """
-    Splits the JSDoc tag text (everything following the @) at the first
+    Split the JSDoc tag text (everything following the @) at the first
     whitespace.  Returns a tuple of (tagname, body).
     """
     splitval = re.split('\s+', section, 1)
@@ -221,7 +231,7 @@ FUNCTION_REGEXPS = [
 
 def guess_function_name(next_line, regexps=FUNCTION_REGEXPS):
     """
-    Attempts to determine the function name from the first code line
+    Attempt to determine the function name from the first code line
     following the comment.  The patterns recognized are described by
     `regexps`, which defaults to FUNCTION_REGEXPS.  If a match is successful, 
     returns the function name.  Otherwise, returns None.
@@ -234,7 +244,7 @@ def guess_function_name(next_line, regexps=FUNCTION_REGEXPS):
 
 def guess_parameters(next_line):
     """
-    Attempts to guess parameters based on the presence of a parenthesized
+    Attempt to guess parameters based on the presence of a parenthesized
     group of identifiers.  If successful, returns a list of parameter names;
     otherwise, returns None.
     """
@@ -246,7 +256,7 @@ def guess_parameters(next_line):
 
 def parse_comment(doc_comment, next_line):
     r"""
-    Splits the raw comment text into a dictionary of tags.  The main comment
+    Split the raw comment text into a dictionary of tags.  The main comment
     body is included as 'doc'.
 
     >>> comment = get_doc_comments(read_file('examples/module.js'))[4][0]
@@ -281,7 +291,7 @@ def parse_comment(doc_comment, next_line):
 
 def parse_comments_for_file(filename):
     """
-    Returns a list of all parsed comments in a file.  Mostly for testing &
+    Return a list of all parsed comments in a file.  Mostly for testing &
     interactive use.
     """
     return [parse_comment(strip_stars(comment), next_line)
@@ -1159,7 +1169,7 @@ class MissingDependency(Exception):
 
 def build_dependency_graph(start_nodes, js_doc):
     """
-    Builds a graph where nodes are filenames and edges are reverse dependencies
+    Build a graph where nodes are filenames and edges are reverse dependencies
     (so an edge from jquery.js to jquery.dimensions.js indicates that jquery.js
     must be included before jquery.dimensions.js).  The graph is represented
     as a dictionary from filename to (in-degree, edges) pair, for ease of
@@ -1191,6 +1201,10 @@ def build_dependency_graph(start_nodes, js_doc):
     return dependencies, start_sort 
 
 def topological_sort(dependencies, start_nodes):
+    """
+    Perform a topological sort on the dependency graph `dependencies`, starting
+    from list `start_nodes`.
+    """
     retval = []
     def edges(node): return dependencies[node][1]
     def in_degree(node): return dependencies[node][0]
@@ -1211,7 +1225,7 @@ def topological_sort(dependencies, start_nodes):
 
 def find_dependencies(start_nodes, js_doc):
     """ 
-    Sorts the dependency graph, taking in a list of starting module names and a
+    Sort the dependency graph, taking in a list of starting module names and a
     CodeBaseDoc (or equivalent dictionary).  Returns an ordered list of
     transitive dependencies such that no module appears before its
     dependencies.
@@ -1221,7 +1235,7 @@ def find_dependencies(start_nodes, js_doc):
 ##### HTML utilities #####
 def build_html_page(title, body):
     """
-    Builds the simple tag skeleton for a title and body.
+    Build the simple tag skeleton for a title and body.
     """
     return """<html>
     <head>
@@ -1234,6 +1248,10 @@ def build_html_page(title, body):
 </html>""" % (title, body)
 
 def make_index(css_class, entities):
+    """
+    Generate the HTML index (a short description and a link to the full
+    documentation) for a list of FunctionDocs or ClassDocs.
+    """
     def make_entry(entity):
         return ('<dt><a href = "%(url)s">%(name)s</a></dt>\n' +
                 '<dd>%(doc)s</dd>') % {
@@ -1249,7 +1267,7 @@ def make_index(css_class, entities):
 
 def first_sentence(str):
     """
-    Returns the first sentence of a string - everything up to the period,
+    Return the first sentence of a string - everything up to the period,
     or the whole text if there is no period.
 
     >>> first_sentence('')
@@ -1264,7 +1282,7 @@ def first_sentence(str):
 
 def htmlize_paragraphs(text):
     """
-    Converts paragraphs delimited by blank lines into HTML text enclosed
+    Convert paragraphs delimited by blank lines into HTML text enclosed
     in <p> tags.
     """
     paragraphs = re.split('(\r?\n)\s*(\r?\n)', text)
@@ -1272,7 +1290,7 @@ def htmlize_paragraphs(text):
 
 def printable(id):
     """
-    Turns a Python identifier into something fit for human consumption.
+    Turn a Python identifier into something fit for human consumption.
 
     >>> printable('author')
     'Author'
@@ -1329,7 +1347,7 @@ Cookbook of common tasks:
 
 def get_path_list(opts):
     """
-    Returns a list of all root paths where JS files can be found, given the
+    Return a list of all root paths where JS files can be found, given the
     command line options (in dict form) for this script.
     """
     paths = []
@@ -1339,6 +1357,10 @@ def get_path_list(opts):
     return paths or [os.getcwd()]
 
 def run_and_exit_if(opts, action, *names):
+    """
+    Run the no-arg function `action` if any of `names` appears in the
+    option dict `opts`.
+    """
     for name in names:
         if name in opts:
             action()
@@ -1348,12 +1370,12 @@ def run_doctests():
     import doctest
     doctest.testmod()
 
-def main():
+def main(args):
     """
     Main command-line invocation.
     """
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], 'p:o:jdt', [
+        opts, args = getopt.gnu_getopt(args[1:], 'p:o:jdt', [
             'jspath=', 'output=', 'private', 'json', 'dependencies', 
             'test', 'help'])
         opts = dict(opts)
@@ -1386,4 +1408,4 @@ def main():
     docs.save_docs(selected_files, output)
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
