@@ -72,6 +72,21 @@ def is_js_file(filename):
        and not '.pack' in filename \
        and not '.min' in filename
 
+def trim_js_ext(filename):
+    """
+    If `filename` ends with .js, trims the extension off.
+
+    >>> trim_js_ext('foo.js')
+    'foo'
+    >>> trim_js_ext('something_else.html')
+    'something_else.html'
+
+    """
+    if filename.endswith('.js'):
+        return filename[:-3]
+    else:
+        return filename
+
 def list_js_files(dir):
     """
     Generator for all JavaScript files in the directory, recursively
@@ -408,17 +423,17 @@ class CodeBaseDoc(dict):
         If it doesn't find it there, it looks for a global function:
 
         >>> doc.translate_ref_to_url('#make_class')
-        'module_closure.js.html#make_class'
+        'module_closure.html#make_class'
 
         A reference of the form ClassName#method_name looks up a specific method:
 
         >>> doc.translate_ref_to_url('MyClass#first_method')
-        'class.js.html#first_method'
+        'class.html#first_method'
 
         Finally, a reference of the form ClassName looks up a specific class:
 
         >>> doc.translate_ref_to_url('MyClass')
-        'class.js.html#MyClass'
+        'class.html#MyClass'
 
         """
         if ref.startswith('#'):
@@ -525,7 +540,7 @@ class CodeBaseDoc(dict):
         for filename in files:
             try:
                 doc = self[filename]
-                save_file('%s/%s.html' % (output_dir, doc.name), 
+                save_file('%s/%s.html' % (output_dir, trim_js_ext(doc.name)), 
                         build_html_page(doc.name, doc.to_html(self)))
             except KeyError:
                 warn('File %s does not exist', filename)
@@ -646,7 +661,7 @@ class FileDoc(object):
 
     @property
     def url(self):
-        return self.name + '.html'
+        return trim_js_ext(self.name) + '.html'
 
     def _filtered_iter(self, pred):
         return (self.comments[name] for name in self.order 
@@ -839,7 +854,7 @@ class ModuleDoc(CommentDoc):
             else:
                 return ''
         def build_dependency(val):
-            return ', '.join('<a href = "%s.html">%s</a>' % (name, name)
+            return ', '.join('<a href = "%s.html">%s</a>' % (trim_js_ext(name), name)
                              for name in val)
         for key in ('author', 'organization', 'version', 'license'):
             html += build_line(key, lambda val: val, lambda val: val)
@@ -1037,7 +1052,7 @@ class ClassDoc(CommentDoc):
     @property
     def superclass(self):
         """
-        Returns the immediate superclass name of the class, as a string.  For
+        Return the immediate superclass name of the class, as a string.  For
         the full inheritance chain, use the `all_superclasses` property, which
         returns a list of objects and only works if this ClassDoc was created
         from a CodeBaseDoc.
