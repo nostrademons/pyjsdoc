@@ -308,7 +308,8 @@ class CodeBaseDoc(dict):
 
     """
 
-    def __init__(self, root_paths):
+    def __init__(self, root_paths, include_private=False):
+        self.include_private = include_private
         self.populate_files(root_paths, root_paths)
         self.build_dependencies()
         self.build_superclass_lists()
@@ -481,7 +482,7 @@ class CodeBaseDoc(dict):
         return '<h1>Module index</h1>\n' + \
                 make_index('all_modules', self.values())
 
-    def save_docs(self, files, output_dir=None, include_private=False):
+    def save_docs(self, files, output_dir=None):
         if output_dir:
             try:
                 os.mkdir(output_dir)
@@ -498,7 +499,7 @@ class CodeBaseDoc(dict):
             try:
                 doc = self[filename]
                 save_file('%s/%s.html' % (output_dir, doc.name), 
-                        build_html_page(doc.name, doc.to_html(include_private)))
+                        build_html_page(doc.name, doc.to_html(self)))
             except KeyError:
                 warn('File %s does not exist', filename)
 
@@ -674,19 +675,20 @@ class FileDoc(object):
     def to_dict(self):
         return [comment.to_dict() for comment in self]
 
-    def to_html(self, include_private=False):
-        if include_private:
+    def to_html(self, codebase):
+        if codebase.include_private:
             def visible(fns): return fns
         else:
             def visible(fns): 
                 return filter(lambda fn: not fn.is_private, fns)
 
         vars = [
-            ('module_info', self.module_info.to_html()),
+            ('module_info', self.module_info.to_html(codebase)),
             ('function_index', make_index('functions', visible(self.functions))),
             ('class_index', make_index('classes', self.classes)),
-            ('functions', '\n'.join(fn.to_html() for fn in visible(self.functions))),
-            ('classes', '\n'.join(cls.to_html(include_private) for cls in self.classes))
+            ('functions', '\n'.join(fn.to_html(codebase) 
+                                    for fn in visible(self.functions))),
+            ('classes', '\n'.join(cls.to_html(codebase) for cls in self.classes))
         ]
         html = '<h1>Module documentation for %s</h1>\n%s' % (
                 self.name, htmlize_paragraphs(self.module_info.doc))
@@ -800,7 +802,7 @@ class ModuleDoc(CommentDoc):
             vars['all_dependencies'] = []
         return vars
 
-    def to_html(self):
+    def to_html(self, codebase):
         html = ''
         def build_line(key, include_pred, format_fn):
             val = getattr(self, key)
@@ -975,7 +977,7 @@ class FunctionDoc(CommentDoc):
         })
         return vars
 
-    def to_html(self):
+    def to_html(self, codebase):
         body = ''
         for section in ('params', 'options', 'exceptions'):
             val = getattr(self, section)
@@ -1041,12 +1043,12 @@ class ClassDoc(CommentDoc):
         })
         return vars
 
-    def to_html(self, include_private_methods=False):
+    def to_html(self, codebase):
         return ('<a name = "%s" />\n<div class = "jsclass">\n' + 
                 '<h3>%s</h3>\n%s\n<h4>Methods</h4>\n%s</div>') % (
                 self.name, self.name, self.doc,
-                '\n'.join(method.to_html() for method in self.methods
-                        if include_private_methods or not method.is_private))
+                '\n'.join(method.to_html(codebase) for method in self.methods
+                        if codebase.include_private or not method.is_private))
 
 class ParamDoc(object):
     """
@@ -1339,7 +1341,7 @@ def main():
     run_and_exit_if(opts, usage, '--help')
 
     js_paths = get_path_list(opts)
-    docs = CodeBaseDoc(js_paths)
+    docs = CodeBaseDoc(js_paths, '--private' in opts)
     if args:
         selected_files = set(docs.keys()) & set(args)
     else:
@@ -1357,7 +1359,7 @@ def main():
     output = opts.get('--output') or opts.get('-o')
     if output is None and len(args) != 1:
         output = 'apidocs'
-    docs.save_docs(selected_files, output, '--private' in opts)
+    docs.save_docs(selected_files, output)
 
 if __name__ == '__main__':
     main()
