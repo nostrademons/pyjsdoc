@@ -12,7 +12,7 @@ this.MySubClass = ModuleClosure.make_class(MyClass, {
 
     /**
      * This is the constructor, marked explicitly and presumably called by
-     * the make_class machinery.
+     * the {@link #make_class} machinery.
      *
      * @constructor
      * @member MySubClass
@@ -33,6 +33,7 @@ this.MySubClass = ModuleClosure.make_class(MyClass, {
      * A private method 
      * @private
      * @member MySubClass
+     * @see #public_method
      */
     private_method: function(args) {}
 

@@ -454,6 +454,23 @@ class CodeBaseDoc(dict):
                 return file_doc.url + url
         return ''
 
+    def build_see_html(self, see_tags, header_tag, in_comment=None):
+        def list_tag(see_tag):
+            return '<li><a href = "%s">%s</a></li>' % (
+                    self.translate_ref_to_url(see_tag, in_comment), see_tag)
+        if see_tags:
+            return '<%s>See Also:</%s>\n<ul>\n' % (header_tag, header_tag) + \
+                   '\n'.join(list_tag(tag) for tag in see_tags) + '</ul>'
+        else:
+            return ''
+
+    def translate_links(self, text, in_comment=None):
+        def replace_link(matchobj):
+            ref = matchobj.group(1)
+            return '<a href = "%s">%s</a>' % (
+                    self.translate_ref_to_url(ref, in_comment), ref)
+        return re.sub('{@link ([\w#]+)}', replace_link, text)
+
     def to_json(self, files=None):
         """
         Converts the full CodeBaseDoc into JSON text.  The optional `files`
@@ -690,8 +707,8 @@ class FileDoc(object):
                                     for fn in visible(self.functions))),
             ('classes', '\n'.join(cls.to_html(codebase) for cls in self.classes))
         ]
-        html = '<h1>Module documentation for %s</h1>\n%s' % (
-                self.name, htmlize_paragraphs(self.module_info.doc))
+        html = '<h1>Module documentation for %s</h1>\n%s' % (self.name, 
+                htmlize_paragraphs(codebase.translate_links(self.module_info.doc)))
         for key, html_text in vars:
             if html_text:
                 html += '<h2>%s</h2>\n%s' % (printable(key), html_text)
@@ -756,6 +773,7 @@ class CommentDoc(object):
     def to_dict(self):
         return self.parsed.copy()
 
+
 class ModuleDoc(CommentDoc):
     """
     Represents the top-level fileoverview documentation.
@@ -818,6 +836,8 @@ class ModuleDoc(CommentDoc):
         html += build_line('dependencies', lambda val: val, build_dependency)
         html += build_line('all_dependencies', lambda val: len(val) > 1, 
                                                 build_dependency)
+        html += codebase.build_see_html(self.see, 'h3')
+        
         if html:
             return '<dl class = "module_info">\n%s\n</dl>\n' % html
         else:
@@ -985,9 +1005,11 @@ class FunctionDoc(CommentDoc):
                 body += '<h5>%s</h5>\n<dl class = "%s">%s</dl>' % (
                         printable(section), section, 
                         '\n'.join(param.to_html() for param in val))
+
+        body += codebase.build_see_html(self.see, 'h5', self)
         return ('<a name = "%s" />\n<div class = "function">\n' + 
-                '<h4>%s</h4>\n%s\n%s\n</div>\n') % (self.name,
-                self.name, htmlize_paragraphs(self.doc), body)
+                '<h4>%s</h4>\n%s\n%s\n</div>\n') % (self.name, self.name, 
+                    htmlize_paragraphs(codebase.translate_links(self.doc, self)), body)
 
 class ClassDoc(CommentDoc):
     """
@@ -1046,7 +1068,9 @@ class ClassDoc(CommentDoc):
     def to_html(self, codebase):
         return ('<a name = "%s" />\n<div class = "jsclass">\n' + 
                 '<h3>%s</h3>\n%s\n<h4>Methods</h4>\n%s</div>') % (
-                self.name, self.name, self.doc,
+                self.name, self.name, 
+                htmlize_paragraphs(codebase.translate_links(self.doc, self)) +
+                codebase.build_see_html(self.see, 'h4', self),
                 '\n'.join(method.to_html(codebase) for method in self.methods
                         if codebase.include_private or not method.is_private))
 
