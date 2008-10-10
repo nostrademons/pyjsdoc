@@ -545,7 +545,12 @@ class CodeBaseDoc(dict):
             except OSError:
                 pass
 
-            shutil.copy('jsdoc.css', output_dir)
+            try:
+                css_file = os.path.join(os.path.dirname(__file__), 'jsdoc.css')
+                shutil.copy(css_file, output_dir)
+            except IOError:
+                print 'jsdoc.css not found.  HTML will not be styled.'
+
             save_file('%s/index.html' % output_dir, 
                     build_html_page('Module index', self.to_html()))
         else:
