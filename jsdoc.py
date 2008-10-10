@@ -55,6 +55,13 @@ def flatten(iter_of_iters):
         retval.extend(val)
     return retval
 
+def any(iter):
+    """ For < Python2.5 compatibility. """
+    for elem in iter:
+        if elem:
+            return True
+    return False
+
 def is_js_file(filename):
     """
     Return true if the filename ends in .js and is not a packed or
