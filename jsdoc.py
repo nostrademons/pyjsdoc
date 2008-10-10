@@ -524,7 +524,14 @@ class CodeBaseDoc(dict):
         return '<h1>Module index</h1>\n' + \
                 make_index('all_modules', self.values())
 
-    def save_docs(self, files, output_dir=None):
+    def save_docs(self, files=None, output_dir=None):
+        """
+        Save documentation files for codebase into `output_dir`.  If output
+        dir is None, it'll refrain from building the index page and build
+        the file(s) in the current directory.
+
+        If `files` is None, it'll build all files in the codebase.
+        """
         if output_dir:
             try:
                 os.mkdir(output_dir)
@@ -536,6 +543,9 @@ class CodeBaseDoc(dict):
                     build_html_page('Module index', self.to_html()))
         else:
             output_dir = '.'
+
+        if files is None:
+            files = self.keys()
 
         for filename in files:
             try:
