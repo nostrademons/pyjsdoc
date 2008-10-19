@@ -98,8 +98,8 @@ def list_js_files(dir):
     """
     Generator for all JavaScript files in the directory, recursively
 
-    >>> list_js_files('examples').next()
-    'examples/module.js'
+    >>> 'examples/module.js' in list(list_js_files('examples'))
+    True
 
     """
     for dirpath, dirnames, filenames in os.walk(dir):
@@ -335,8 +335,8 @@ class CodeBaseDoc(dict):
     dictionary of FileDoc objects, keyed by the filename of the file (relative
     to the source root).
     
-    >>> CodeBaseDoc(['examples']).keys()
-    ['module_closure.js', 'module.js', 'class.js', 'subclass.js']
+    >>> CodeBaseDoc(['examples'])['class.js'].name
+    'class.js'
 
     It also handles dependency & subclass analysis, setting the appropriate
     fields on the contained objects.  Note that the keys (after prefix

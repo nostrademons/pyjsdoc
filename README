@@ -1,10 +1,10 @@
 Python port of JSDoc.
 
-== Installation ==
+## Installation ##
 
 The complete script and API is in one Python sourcefile - jsdoc.py.  Drop this onto your PYTHONPATH to use as a library, or put/symlink it on your PATH to use as a standalone command-line utility.
 
-== Usage ==
+## Usage ##
 
 The syntax of doc comments and set of supported tags is mostly compatible with the [JSDoc tag reference](http://jsdoc.sourceforge.net/#tagref), but has some differences because PyJSDoc was originally developed with a codebase that used a more functional (vs. OO) style than JSDoc.  It has the following differences:
 
@@ -22,7 +22,7 @@ Also check out the examples, and build the documentation for them:
 
     ./jsdoc.py -p examples
 
-== Extensibility ==
+## Extensibility ##
 
 When used as a library, PyJSDoc is fully extensible without configuration.  Unrecognized tags are accessible as dictionary fields from the appropriate ModuleDoc/FunctionDoc/ClassDoc object.  For example, the following doc comment:
 
@@ -44,7 +44,7 @@ In PyJSDoc's parent project, we used this in a few places:
 
 Also, the -j (--json) command-line switch lets you dump the JSDoc parse tree in JSON format, which lets you use the PyJSDoc front-end from other languages.
 
-== History ==
+## History ##
 
 PyJSDoc started out as a dependency analyzer for home-grown JQuery plugins.  We needed some way to automatically build the dependency chain; the easiest, most maintainable way to do this was through JSDoc comments.  However, JSDoc and JSDoc Toolkit required quite a bit of customization to get at the raw parse tree, and the latter needed a JavaScript runtime on our build box.  It was easier to write a simple regexp-based parser for JSDoc comments and extract only what we needed.
 
@@ -52,6 +52,6 @@ Over time, we found numerous other ways where an extensible, lenient JSDoc parse
 
 When our startup folded, I ended up with the code, and decided I might as well open-source it.  I ended up rewriting most of it for improved JSDoc compatibility, as well as cleaning up the code, which was initially a quick & dirty hack.
 
-== Credits ==
+## Credits ##
 
 Written by Jonathan Tang, 2007-2008.
