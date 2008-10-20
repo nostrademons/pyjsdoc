@@ -5,7 +5,7 @@ Python library & command-line tool for performing a variety of build
 
 This offers the following features:
 
-* List all dependencies of a plugin or plugins
+* List all dependencies of a file or files:
 * Check for method name conflicts among a set of plugins
 * Extract metadata from doc comments
 * Generate documentation for a set of files.
@@ -369,7 +369,7 @@ class CodeBaseDoc(dict):
 
     def build_dependencies(self):
         """
-        >>> CodeBaseDoc(['examples'])['subclass.js'].module_info.all_dependencies
+        >>> CodeBaseDoc(['examples'])['subclass.js'].module.all_dependencies
         ['module.js', 'module_closure.js', 'class.js', 'subclass.js']
         """
         for module in self.values():
@@ -679,12 +679,12 @@ class FileDoc(object):
         self.comments['file_overview'].all_dependencies = dependencies
 
     @property
-    def module_info(self):
+    def module(self):
         return self.comments['file_overview']
 
     @property
     def doc(self):
-        return self.module_info.doc
+        return self.module.doc
 
     @property
     def url(self):
@@ -752,7 +752,7 @@ class FileDoc(object):
                 return filter(lambda fn: not fn.is_private, fns)
 
         vars = [
-            ('module_info', self.module_info.to_html(codebase)),
+            ('module', self.module.to_html(codebase)),
             ('function_index', make_index('functions', visible(self.functions))),
             ('class_index', make_index('classes', self.classes)),
             ('functions', '\n'.join(fn.to_html(codebase) 
@@ -760,7 +760,7 @@ class FileDoc(object):
             ('classes', '\n'.join(cls.to_html(codebase) for cls in self.classes))
         ]
         html = '<h1>Module documentation for %s</h1>\n%s' % (self.name, 
-                htmlize_paragraphs(codebase.translate_links(self.module_info.doc)))
+                htmlize_paragraphs(codebase.translate_links(self.module.doc)))
         for key, html_text in vars:
             if html_text:
                 html += '<h2>%s</h2>\n%s' % (printable(key), html_text)
@@ -854,9 +854,9 @@ class ModuleDoc(CommentDoc):
         dependencies - the FileDoc must have been created by a CodeBaseDoc for
         this field to exist.
 
-        >>> FileDoc('', read_file('examples/module_closure.js')).module_info.dependencies
+        >>> FileDoc('', read_file('examples/module_closure.js')).module.dependencies
         ['module.js']
-        >>> FileDoc('subclass.js', read_file('examples/subclass.js')).module_info.dependencies
+        >>> FileDoc('subclass.js', read_file('examples/subclass.js')).module.dependencies
         ['module_closure.js', 'class.js']
 
         """
@@ -891,7 +891,7 @@ class ModuleDoc(CommentDoc):
         html += codebase.build_see_html(self.see, 'h3')
         
         if html:
-            return '<dl class = "module_info">\n%s\n</dl>\n' % html
+            return '<dl class = "module">\n%s\n</dl>\n' % html
         else:
             return ''
 
@@ -1221,7 +1221,7 @@ def build_dependency_graph(start_nodes, js_doc):
     dependencies = {}
     start_sort = []
     def add_vertex(file):
-        in_degree = len(js_doc[file].module_info.dependencies)
+        in_degree = len(js_doc[file].module.dependencies)
         dependencies[file] = [in_degree, []]
         queue.append(file)
         if in_degree == 0:
@@ -1234,7 +1234,7 @@ def build_dependency_graph(start_nodes, js_doc):
     for file in start_nodes:
         add_vertex(file)
     for file in queue:
-        for dependency in js_doc[file].module_info.dependencies:
+        for dependency in js_doc[file].module.dependencies:
             if dependency not in js_doc:
                 raise MissingDependency(file, dependency)
             if not is_in_graph(dependency):
