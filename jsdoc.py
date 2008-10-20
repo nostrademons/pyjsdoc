@@ -3,12 +3,23 @@
 Python library & command-line tool for performing a variety of build
 & deployment tasks of jQuery plugins.  
 
-This offers the following features:
+Some of the features this offers:
 
-* List all dependencies of a file or files:
-* Check for method name conflicts among a set of plugins
-* Extract metadata from doc comments
-* Generate documentation for a set of files.
+List all dependencies of a file or files:
+
+>>> CodeBaseDoc(['examples'])['subclass.js'].module.all_dependencies
+['module.js', 'module_closure.js', 'class.js', 'subclass.js']
+
+Programmatically access properties of the documentation:
+
+>>> CodeBaseDoc(['examples'])['subclass.js']['public_method'].doc
+'A public method.'
+>>> CodeBaseDoc(['examples'])['subclass.js']['public_method'].is_private
+False
+
+Generate documentation for a set of files:
+
+>>> CodeBaseDoc(['examples']).save_docs(None, 'js_apidocs')
 
 Tag reference is similar to JSDoc: http://jsdoc.sourceforge.net/#tagref.  See usage() for command line options.
 
