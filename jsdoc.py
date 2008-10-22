@@ -357,12 +357,20 @@ class CodeBaseDoc(dict):
     """
 
     def __init__(self, root_paths, include_private=False):
-        self.include_private = include_private
-        self.populate_files(root_paths, root_paths)
-        self.build_dependencies()
-        self.build_superclass_lists()
+        """
+        Create a new `CodeBaseDoc`.  `root_paths` is a list of directories
+        where JavaScript files can be found.  @see and @dependency tags
+        are relative to these paths.
 
-    def populate_files(self, root_paths, prefix):
+        By default, private methods are not included.  Pass True to
+        `include_private` to include them.
+        """
+        self.include_private = include_private
+        self._populate_files(root_paths, root_paths)
+        self._build_dependencies()
+        self._build_superclass_lists()
+
+    def _populate_files(self, root_paths, prefix):
         files = get_file_list(root_paths)
         def key_name(file_name):
             if prefix is None:
@@ -378,7 +386,7 @@ class CodeBaseDoc(dict):
             name = key_name(file)
             self[name] = FileDoc(name, read_file(file))
 
-    def build_dependencies(self):
+    def _build_dependencies(self):
         """
         >>> CodeBaseDoc(['examples'])['subclass.js'].module.all_dependencies
         ['module.js', 'module_closure.js', 'class.js', 'subclass.js']
@@ -386,7 +394,7 @@ class CodeBaseDoc(dict):
         for module in self.values():
             module.set_all_dependencies(find_dependencies([module.name], self))
 
-    def build_superclass_lists(self):
+    def _build_superclass_lists(self):
         """
         >>> CodeBaseDoc(['examples']).all_classes['MySubClass'].all_superclasses[0].name
         'MyClass'
@@ -513,6 +521,12 @@ class CodeBaseDoc(dict):
             return ''
 
     def translate_links(self, text, in_comment=None):
+        """
+        Turn all @link tags in `text` into HTML anchor tags.
+
+        `in_comment` is the `CommentDoc` that contains the text, for
+        relative method lookups.
+        """
         def replace_link(matchobj):
             ref = matchobj.group(1)
             return '<a href = "%s">%s</a>' % (
@@ -591,6 +605,10 @@ class FileDoc(object):
     """
 
     def __init__(self, file_name, file_text):
+        """
+        Construct a FileDoc.  `file_name` is the name of the JavaScript file,
+        `file_text` is its text.
+        """
         self.name = file_name
         self.order = []
         self.comments = { 'file_overview': ModuleDoc({}) }
@@ -691,10 +709,16 @@ class FileDoc(object):
 
     @property
     def module(self):
+        """
+        Return the `ModuleDoc` comment for this file.
+        """
         return self.comments['file_overview']
 
     @property
     def doc(self):
+        """
+        Shortcut for ``self.module.doc``.
+        """
         return self.module.doc
 
     @property
@@ -798,14 +822,14 @@ class CommentDoc(object):
 
     def get(self, tag_name, default=''):
         """
-        Returns the value of a particular tag, or None if that tag doesn't
+        Return the value of a particular tag, or None if that tag doesn't
         exist.  Use 'doc' for the comment body itself.
         """
         return self.parsed.get(tag_name, default)
 
     def get_as_list(self, tag_name):
         """
-        Returns the value of a tag, making sure that it's a list.  Absent
+        Return the value of a tag, making sure that it's a list.  Absent
         tags are returned as an empty-list; single tags are returned as a
         one-element list.
 
@@ -820,20 +844,38 @@ class CommentDoc(object):
 
     @property
     def doc(self):
+        """
+        Return the comment body.
+        """
         return self.get('doc')
 
     @property
     def url(self):
+        """
+        Return a URL for the comment, within the page.
+        """
         return '#' + self.name
 
     @property
     def see(self):
+        """
+        Return a list of all @see tags on the comment.
+        """
         return self.get_as_list('see')
 
     def to_json(self):
+        """
+        Return a JSON representation of the CommentDoc.  Keys are as per
+        to_dict.
+        """
         return encode_json(self.to_dict())
 
     def to_dict(self):
+        """
+        Return a dictionary representation of the CommentDoc.  The keys of
+        this correspond to the tags in the comment, with the comment body in
+        `doc`.
+        """
         return self.parsed.copy()
 
 
@@ -843,19 +885,39 @@ class ModuleDoc(CommentDoc):
     """
 
     @property
-    def name(self): return 'file_overview'
+    def name(self): 
+        """
+        Always return 'file_overview'.
+        """
+        return 'file_overview'
 
     @property
-    def author(self): return self.get('author')
+    def author(self): 
+        """
+        Return the author of this module, as a string.
+        """
+        return self.get('author')
 
     @property
-    def organization(self): return self.get('organization')
+    def organization(self): 
+        """
+        Return the organization that developed this, as as string.
+        """
+        return self.get('organization')
 
     @property
-    def license(self): return self.get('license')
+    def license(self): 
+        """
+        Return the license of this module, as as string.
+        """
+        return self.get('license')
 
     @property
-    def version(self): return self.get('version')
+    def version(self): 
+        """
+        Return the version of this module, as as string.
+        """
+        return self.get('version')
 
     @property
     def dependencies(self): 
@@ -874,6 +936,14 @@ class ModuleDoc(CommentDoc):
         return self.get_as_list('dependency')
 
     def to_dict(self):
+        """
+        Return this ModuleDoc as a dict.  In addition to `CommentDoc` defaults,
+        this has:
+
+            - **name**: The module name.
+            - **dependencies**: A list of immediate dependencies.
+            - **all_dependencies**: A list of all dependencies.
+        """
         vars = super(ModuleDoc, self).to_dict()
         vars['dependencies'] = self.dependencies
         vars['name'] = self.name
@@ -884,6 +954,9 @@ class ModuleDoc(CommentDoc):
         return vars
 
     def to_html(self, codebase):
+        """
+        Convert this to HTML.
+        """
         html = ''
         def build_line(key, include_pred, format_fn):
             val = getattr(self, key)
@@ -908,7 +981,7 @@ class ModuleDoc(CommentDoc):
 
 class FunctionDoc(CommentDoc):
     r"""
-    Represents documentation for a single function or method.  Takes a parsed
+    Documentation for a single function or method.  Takes a parsed
     comment and provides accessors for accessing the various fields.
 
     >>> comments = parse_comments_for_file('examples/module_closure.js')
@@ -1036,17 +1109,40 @@ class FunctionDoc(CommentDoc):
 
     @property
     def is_private(self):
+        """
+        Return True if this is a private function or method.
+        """
         return 'private' in self.parsed
 
     @property
     def member(self):
+        """
+        Return the raw text of the @member tag, a reference to a method's
+        containing class, or None if this is a standalone function.
+        """
         return self.get('member')
 
     @property
     def is_constructor(self):
+        """
+        Return True if this function is a constructor.
+        """
         return 'constructor' in self.parsed
 
     def to_dict(self):
+        """
+        Convert this FunctionDoc to a dictionary.  In addition to `CommentDoc`
+        keys, this adds:
+
+            - **name**: The function name
+            - **params**: A list of parameter dictionaries
+            - **options**: A list of option dictionaries
+            - **exceptions**: A list of exception dictionaries
+            - **return_val**: A dictionary describing the return type, as per `ParamDoc`
+            - **is_private**: True if private
+            - **is_constructor**: True if a constructor
+            - **member**: The raw text of the member property.
+        """
         vars = super(FunctionDoc, self).to_dict()
         vars.update({
             'name': self.name,
@@ -1061,6 +1157,9 @@ class FunctionDoc(CommentDoc):
         return vars
 
     def to_html(self, codebase):
+        """
+        Convert this `FunctionDoc` to HTML.
+        """
         body = ''
         for section in ('params', 'options', 'exceptions'):
             val = getattr(self, section)
@@ -1082,7 +1181,7 @@ class ClassDoc(CommentDoc):
         """
         Initialize this object from a parsed comment dictionary.  `add_method`
         must be called later to populate the `methods` property with
-        `FunctionDoc`s.
+        `FunctionDoc`.
         """
         super(ClassDoc, self).__init__(parsed_comment)
         self.methods = []
@@ -1200,6 +1299,13 @@ class ParamDoc(object):
             self.doc = ' '.join(parsed[1:])
 
     def to_dict(self):
+        """
+        Convert this to a dict.  Keys (all strings) are:
+            
+            - **name**: Parameter name
+            - **type**: Parameter type
+            - **doc**: Parameter description
+        """
         return {
             'name': self.name,
             'type': self.type,
