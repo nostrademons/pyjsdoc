@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-Python library & command-line tool for performing a variety of build
-& deployment tasks of jQuery plugins.  
+Python library & command-line tool for documentation and dependency analysis
+of JavaScript files.
 
 Some of the features this offers:
 
@@ -1076,9 +1076,14 @@ class FunctionDoc(CommentDoc):
 
 class ClassDoc(CommentDoc):
     """
-    Represents documentation for a single class.
+    Documentation for a single class.
     """
     def __init__(self, parsed_comment):
+        """
+        Initialize this object from a parsed comment dictionary.  `add_method`
+        must be called later to populate the `methods` property with
+        `FunctionDoc`s.
+        """
         super(ClassDoc, self).__init__(parsed_comment)
         self.methods = []
         # Methods are added externally with add_method, after construction
@@ -1093,15 +1098,22 @@ class ClassDoc(CommentDoc):
         Return the immediate superclass name of the class, as a string.  For
         the full inheritance chain, use the `all_superclasses` property, which
         returns a list of objects and only works if this ClassDoc was created
-        from a CodeBaseDoc.
+        from a `CodeBaseDoc`.
         """
         return self.get('extends') or self.get('base')
 
     @property
     def constructors(self):
+        """
+        Return all methods labeled with the @constructor tag.
+        """
         return [fn for fn in self.methods if fn.is_constructor]
 
     def add_method(self, method):
+        """
+        Add a `FunctionDoc` method to this class.  Called automatically if this
+        ClassDoc was constructed from a CodeBaseDoc.
+        """
         self.methods.append(method)
 
     def has_method(self, method_name):
@@ -1121,6 +1133,14 @@ class ClassDoc(CommentDoc):
         return default
 
     def to_dict(self):
+        """
+        Convert this ClassDoc to a dict, such as if you want to use it in a
+        template or string interpolation.  Aside from the basic `CommentDoc`
+        fields, this also contains:
+
+            - **name**: The class name
+            - **method**: A list of methods, in their dictionary form.
+        """
         vars = super(ClassDoc, self).to_dict()
         vars.update({
             'name': self.name,
@@ -1129,6 +1149,10 @@ class ClassDoc(CommentDoc):
         return vars
 
     def to_html(self, codebase):
+        """
+        Convert this ClassDoc to HTML.  This returns the default long-form
+        HTML description that's used when the full docs are built.
+        """
         return ('<a name = "%s" />\n<div class = "jsclass">\n' + 
                 '<h3>%s</h3>\n%s\n<h4>Methods</h4>\n%s</div>') % (
                 self.name, self.name, 
