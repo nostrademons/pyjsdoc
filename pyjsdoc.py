@@ -576,7 +576,8 @@ class CodeBaseDoc(dict):
                 pass
 
             try:
-                css_file = os.path.join(os.path.dirname(__file__), 'jsdoc.css')
+                base_dir = os.path.dirname(os.path.realpath(__file__))
+                css_file = os.path.join(base_dir, 'jsdoc.css')
                 shutil.copy(css_file, output_dir)
             except IOError:
                 print 'jsdoc.css not found.  HTML will not be styled.'
@@ -1553,7 +1554,7 @@ def run_doctests():
     import doctest
     doctest.testmod()
 
-def main(args):
+def main(args=sys.argv):
     """
     Main command-line invocation.
     """
@@ -1591,4 +1592,4 @@ def main(args):
     docs.save_docs(selected_files, output)
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()
