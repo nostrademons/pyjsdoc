@@ -3,4 +3,7 @@
 *~
 *.pyc
 apidocs
+build
+dist
+*.egg-info
 *.tar.gz

@@ -573,7 +573,7 @@ class CodeBaseDoc(dict):
             try:
                 import pkg_resources
                 save_file(os.path.join(output_dir, 'jsdoc.css'),
-                        pkg_resources.resource_string(__name__, 'jsdoc.css'))
+                    pkg_resources.resource_string(__name__, 'static/jsdoc.css'))
             except (ImportError, IOError):
                 try:
                     import shutil
