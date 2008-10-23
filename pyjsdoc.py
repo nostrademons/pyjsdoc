@@ -25,12 +25,7 @@ Tag reference is similar to JSDoc: http://jsdoc.sourceforge.net/#tagref.  See us
 
 """
 
-import os
-import re
-import sys
-import getopt
-import cgi
-import shutil
+import os, re, sys, getopt, cgi
 
 try:
     import cjson
@@ -576,11 +571,17 @@ class CodeBaseDoc(dict):
                 pass
 
             try:
-                base_dir = os.path.dirname(os.path.realpath(__file__))
-                css_file = os.path.join(base_dir, 'jsdoc.css')
-                shutil.copy(css_file, output_dir)
-            except IOError:
-                print 'jsdoc.css not found.  HTML will not be styled.'
+                import pkg_resources
+                save_file(os.path.join(output_dir, 'jsdoc.css'),
+                        pkg_resources.resource_string(__name__, 'jsdoc.css'))
+            except (ImportError, IOError):
+                try:
+                    import shutil
+                    base_dir = os.path.dirname(os.path.realpath(__file__))
+                    css_file = os.path.join(base_dir, 'jsdoc.css')
+                    shutil.copy(css_file, output_dir)
+                except IOError:
+                    print 'jsdoc.css not found.  HTML will not be styled.'
 
             save_file('%s/index.html' % output_dir, 
                     build_html_page('Module index', self.to_html()))
