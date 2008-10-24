@@ -4,6 +4,8 @@ Python port of JSDoc.
 
 The complete script and API is in one Python sourcefile - pyjsdoc.py.  Drop this onto your PYTHONPATH to use as a library, or put/symlink it on your PATH to use as a standalone command-line utility.
 
+Alternatively, this may be installed via "easy_install pyjsdoc".
+
 ## Usage ##
 
 The syntax of doc comments and set of supported tags is mostly compatible with the [JSDoc tag reference](http://jsdoc.sourceforge.net/#tagref), but has some differences because PyJSDoc was originally developed with a codebase that used a more functional (vs. OO) style than JSDoc.  It has the following differences:
