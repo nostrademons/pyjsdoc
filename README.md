@@ -41,7 +41,7 @@ Is accessible through the Python API as:
 
 In PyJSDoc's parent project, we used this in a few places:
 
-* Dependency analysis for automated tests.  We added an @has_test tag to every module with a JSUnit test file, then rebuilt the <script src=> tags in the JSUnit file from the all_dependencies module field, so that whenever an upstream dependency changed, we didn't need to manually change every dependent test file.
+* Dependency analysis for automated tests.  We added an @has_test tag to every module with a JSUnit test file, then rebuilt the `<script src=>` tags in the JSUnit file from the all_dependencies module field, so that whenever an upstream dependency changed, we didn't need to manually change every dependent test file.
 * GUI generation for front-end JS classes.  In several cases, we had a domain model class that needed to be represented in the UI.  Rather than manually code that logic into the app, we added "@widget {WidgetClass} label Help text" tags to the JSDocs, and then used that to dynamically instantiate UI widgets on the front end.
 
 Also, the -j (--json) command-line switch lets you dump the JSDoc parse tree in JSON format, which lets you use the PyJSDoc front-end from other languages.
