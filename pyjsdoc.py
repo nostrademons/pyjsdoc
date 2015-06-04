@@ -152,8 +152,10 @@ def save_file(path, text):
     if not os.path.exists(dir):
         os.makedirs(dir)
 
-    fd = open(path, 'w')
+    fd = open(path, 'wb')
     try:
+        if type(text) == str:
+            text = text.encode('utf-8')
         fd.write(text)
     finally:
         fd.close()
@@ -191,11 +193,11 @@ def split_delimited(delimiters, split_by, text):
     ['', '', 'foo', '', 'bar', '', 'baz', '', '', '']
 
     """
-    delims = [0] * (len(delimiters) / 2)
+    delims = [0] * int(len(delimiters) / 2)
     actions = {}
-    for i in xrange(0, len(delimiters), 2):
-        actions[delimiters[i]] = (i / 2, 1)
-        actions[delimiters[i + 1]] = (i / 2, -1)
+    for i in range(0, len(delimiters), 2):
+        actions[delimiters[i]] = (int(i / 2), 1)
+        actions[delimiters[i + 1]] = (int(i / 2), -1)
 
     if isinstance(split_by, str):
         def split_fn(c): return c == split_by
@@ -203,7 +205,7 @@ def split_delimited(delimiters, split_by, text):
         split_fn = split_by
     last = 0
 
-    for i in xrange(len(text)):
+    for i in range(len(text)):
         c = text[i]
         if split_fn(c) and not any(delims):
             yield text[last:i]
@@ -237,7 +239,7 @@ def get_doc_comments(text):
         try:
             end = text.find('\n', match.end(0)) + 1
             if '@class' not in comment:
-                next_line = split_delimited('()', '\n', text[end:]).next()
+                next_line = next(split_delimited('()', '\n', text[end:]))
             else:
                 next_line = text[end:text.find('\n', end)]
         except StopIteration:
@@ -399,7 +401,7 @@ class CodeBaseDoc(dict):
         >>> CodeBaseDoc(['examples'])['subclass.js'].module.all_dependencies
         ['module.js', 'module_closure.js', 'class.js', 'subclass.js']
         """
-        for module in self.values():
+        for module in list(self.values()):
             module.set_all_dependencies(find_dependencies([module.name], self))
 
     def _build_superclass_lists(self):
@@ -408,7 +410,7 @@ class CodeBaseDoc(dict):
         'MyClass'
         """
         cls_dict = self.all_classes
-        for cls in cls_dict.values():
+        for cls in list(cls_dict.values()):
             cls.all_superclasses = []
             superclass = cls.superclass
             try:
@@ -417,10 +419,10 @@ class CodeBaseDoc(dict):
                     cls.all_superclasses.append(superclass_obj)
                     superclass = superclass_obj.superclass
             except KeyError:
-                print "Missing superclass: " + superclass
+                print("Missing superclass: " + superclass)
 
     def _module_index(self, attr):
-        return dict((obj.name, obj) for module in self.values()
+        return dict((obj.name, obj) for module in list(self.values())
                                     for obj in getattr(module, attr))
 
     @property
@@ -512,7 +514,7 @@ class CodeBaseDoc(dict):
                         return cls.url
                 return None
 
-        for file_doc in self.values():
+        for file_doc in list(self.values()):
             url = lookup_ref(file_doc)
             if url:
                 return file_doc.url + url
@@ -559,7 +561,7 @@ class CodeBaseDoc(dict):
         'MyClass'
 
         """
-        keys = files or self.keys()
+        keys = files or list(self.keys())
         return dict((key, self[key].to_dict()) for key in keys)
 
     def to_html(self):
@@ -567,7 +569,7 @@ class CodeBaseDoc(dict):
         Builds basic HTML for the full module index.
         """
         return '<h1>Module index</h1>\n' + \
-                make_index('all_modules', self.values())
+                make_index('all_modules', list(self.values()))
 
     def save_docs(self, files=None, output_dir=None):
         """
@@ -594,7 +596,7 @@ class CodeBaseDoc(dict):
                     css_file = os.path.join(base_dir, 'jsdoc.css')
                     shutil.copy(css_file, output_dir)
                 except IOError:
-                    print 'jsdoc.css not found.  HTML will not be styled.'
+                    print('jsdoc.css not found.  HTML will not be styled.')
 
             save_file('%s/index.html' % output_dir, 
                     build_html_page('Module index', self.to_html()))
@@ -602,7 +604,7 @@ class CodeBaseDoc(dict):
             output_dir = '.'
 
         if files is None:
-            files = self.keys()
+            files = list(self.keys())
 
         for filename in files:
             try:
@@ -799,7 +801,7 @@ class FileDoc(object):
             def visible(fns): return fns
         else:
             def visible(fns): 
-                return filter(lambda fn: not fn.is_private, fns)
+                return [fn for fn in fns if not fn.is_private]
 
         vars = [
             ('module', self.module.to_html(codebase)),
@@ -1414,7 +1416,7 @@ def topological_sort(dependencies, start_nodes):
             remove_incoming(child)
             if not in_degree(child):
                 start_nodes.append(child)
-    leftover_nodes = [node for node in dependencies.keys()
+    leftover_nodes = [node for node in list(dependencies.keys())
                       if in_degree(node) > 0]
     if leftover_nodes:
         raise CyclicDependency(leftover_nodes)
@@ -1503,7 +1505,7 @@ def printable(id):
 
 def usage():
     command_name = sys.argv[0]
-    print """
+    print("""
 Usage: %(name)s [options] file1.js file2.js ...
 
 By default, this tool recursively searches the current directory for .js files
@@ -1541,7 +1543,7 @@ Cookbook of common tasks:
   Build documentation for all modules on your system:
 
   $ %(name)s -p ~/svn/js -o /var/www/htdocs/jqdocs
-""" % {'name': os.path.basename(command_name) }
+""" % {'name': os.path.basename(command_name) })
 
 def get_path_list(opts):
     """
@@ -1549,7 +1551,7 @@ def get_path_list(opts):
     command line options (in dict form) for this script.
     """
     paths = []
-    for opt, arg in opts.items():
+    for opt, arg in list(opts.items()):
         if opt in ('-p', '--jspath'):
             paths.append(arg)
     return paths or [os.getcwd()]
@@ -1589,15 +1591,15 @@ def main(args=sys.argv):
     if args:
         selected_files = set(docs.keys()) & set(args)
     else:
-        selected_files = docs.keys()
+        selected_files = list(docs.keys())
 
     def print_json():
-        print docs.to_json(selected_files)
+        print(docs.to_json(selected_files))
     run_and_exit_if(opts, print_json, '--json', '-j')
 
     def print_dependencies():
         for dependency in find_dependencies(selected_files, docs):
-            print dependency
+            print(dependency)
     run_and_exit_if(opts, print_dependencies, '--dependencies', '-d')
 
     output = opts.get('--output') or opts.get('-o')
